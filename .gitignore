@@ -1,0 +1,7 @@
+# build output
+src-tauri/target/
+src-tauri/gen/
+installer/anim/target/
+installer/stage/
+installer/*.exe
+__pycache__/

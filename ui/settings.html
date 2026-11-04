@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skip Dat</title>
+<script>/* the app sets this flag on Windows 11, where the window gets Mica */ if (window.__SKIPDAT_MICA) document.documentElement.classList.add('mica');</script>
+<style>
+  /* Liquid glass, like the wheel: tinted glass panels with light on their edges, over the window's own
+     frosted backdrop (Mica on Windows 11) or a calm ambient field. No live blur filters: the only thing
+     that moves with the mouse is composited (transform) or a small gradient on the panel under it. */
+  :root {
+    --ink: #F5F7FB;
+    --ink-soft: rgba(229, 235, 245, .66);
+    --ink-faint: rgba(229, 235, 245, .42);
+    --accent: #F6A9CB;
+    --accent-strong: #F27DB2;
+    --accent-ink: #2A0F1E;
+    --good: #8EE6C2;
+    --warn: #F2B880;
+    --glass: rgba(255, 255, 255, .065);
+    --glass-2: rgba(255, 255, 255, .10);
+    --rim: rgba(255, 255, 255, .14);
+    --rim-hi: rgba(255, 255, 255, .34);
+    --shade: rgba(4, 7, 14, .42);
+    --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { background: #0B1018; }
+  html.mica { background: transparent; }
+  body { margin: 0; min-height: 100vh; color: var(--ink); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+  html.mica body { background: linear-gradient(180deg, rgba(10, 14, 22, .46), rgba(10, 14, 22, .62)); }
+
+  /* ambient field (static, drawn once) and the liquid drop that follows the cursor */
+  #ambient { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none;
+    background: radial-gradient(1200px 700px at 10% -10%, #1C2540 0%, transparent 60%), radial-gradient(900px 600px at 110% 110%, #1A1730 0%, transparent 60%), linear-gradient(160deg, #0E1422, #0A0E17); }
+  html.mica #ambient { background: none; opacity: .55; }
+  #ambient i { position: absolute; border-radius: 50%; filter: blur(70px); opacity: .55; }
+  #ambient .b1 { width: 420px; height: 420px; left: -120px; top: 80px; background: #6D3E8C; }
+  #ambient .b2 { width: 380px; height: 380px; right: -140px; top: 420px; background: #8A2F5E; }
+  #ambient .b3 { width: 360px; height: 360px; left: 30%; bottom: -200px; background: #1F5A6E; }
+  #liquid { position: fixed; left: 0; top: 0; width: 240px; height: 240px; margin: -120px 0 0 -120px; z-index: -1; pointer-events: none; border-radius: 50%;
+    background: radial-gradient(circle at 38% 32%, rgba(255, 255, 255, .30), rgba(246, 169, 203, .20) 30%, rgba(150, 120, 255, .12) 55%, transparent 70%);
+    filter: blur(14px); opacity: 0; transition: opacity .5s ease; will-change: transform; }
+  #liquid.on { opacity: 1; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 22px 20px 30px; display: grid; gap: 14px; }
+
+  /* the glass surface used everywhere */
+  .glass { position: relative; isolation: isolate; border-radius: 20px;
+    background: linear-gradient(180deg, var(--glass-2), var(--glass) 40%), rgba(16, 22, 34, .55);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .20), inset 0 0 0 1px var(--rim), inset 0 -1px 0 rgba(0, 0, 0, .25), 0 12px 32px var(--shade); }
+  /* light that the cursor brings to the surface, and to the rim */
+  .glass::before, .glass::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .35s ease; z-index: -1; }
+  .glass::before { background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .085), transparent 70%); }
+  .glass::after { z-index: 1; padding: 1px; background: radial-gradient(180px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .55), rgba(246, 169, 203, .25) 40%, transparent 70%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+  .glass.lit::before, .glass.lit::after { opacity: 1; }
+
+  header { display: flex; gap: 14px; align-items: center; padding: 6px 4px 2px; }
+  header img { width: 58px; height: 58px; flex: none; filter: drop-shadow(0 8px 16px rgba(0, 0, 0, .35)); }
+  h1 { margin: 0; font: 650 27px/1.1 var(--display); letter-spacing: -.012em; }
+  .lede { margin: 3px 0 0; color: var(--ink-soft); }
+  .ver { margin-left: auto; align-self: flex-start; font-size: 12px; color: var(--ink-faint); padding: 3px 10px; border-radius: 99px; box-shadow: inset 0 0 0 1px var(--rim); white-space: nowrap; }
+
+  section.glass, details.glass { padding: 16px 18px; display: grid; gap: 12px; }
+  details.glass:not([open]) { display: block; }
+  h2, summary { margin: 0; font: 600 15px/1.3 var(--display); display: flex; align-items: center; gap: 10px; }
+  h2 .sub { font: 400 13px var(--font); color: var(--ink-soft); }
+  summary { cursor: pointer; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: ""; margin-left: auto; width: 8px; height: 8px; border: solid var(--ink-soft); border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform .25s ease; }
+  details[open] summary::after { transform: rotate(-135deg); }
+  summary small { font: 400 13px var(--font); color: var(--ink-soft); }
+  details[open] > summary { margin-bottom: 12px; }
+  details > :not(summary) + :not(summary) { margin-top: 10px; }
+  .muted { margin: 0; color: var(--ink-soft); }
+  ul, ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+  a { color: var(--accent); }
+  kbd { font: 600 12px var(--font); padding: 1px 7px; border-radius: 6px; white-space: nowrap; background: rgba(255, 255, 255, .08); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 0 0 1px var(--rim), 0 1px 0 rgba(0, 0, 0, .35); }
+  code { font: 12.5px ui-monospace, Consolas, monospace; padding: 2px 6px; border-radius: 6px; background: rgba(0, 0, 0, .28); box-shadow: inset 0 0 0 1px var(--rim); word-break: break-all; -webkit-user-select: all; user-select: all; }
+
+  /* glass buttons */
+  button { font: 600 13px var(--font); color: var(--ink); cursor: pointer; border: 0; border-radius: 12px; padding: 9px 15px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .06));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .24), inset 0 0 0 1px var(--rim), 0 4px 12px rgba(0, 0, 0, .22);
+    transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
+  button:hover { background: linear-gradient(180deg, rgba(255, 255, 255, .20), rgba(255, 255, 255, .09)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), inset 0 0 0 1px var(--rim-hi), 0 6px 16px rgba(0, 0, 0, .26); transform: translateY(-1px); }
+  button:active { transform: translateY(0) scale(.98); }
+  button.primary { color: var(--accent-ink); background: linear-gradient(180deg, #FBC4DC, var(--accent-strong)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 0 0 1px rgba(255, 255, 255, .25), 0 6px 18px rgba(242, 125, 178, .28); }
+  button:disabled { opacity: .5; cursor: default; transform: none; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* playing now */
+  .list { display: grid; gap: 8px; }
+  .src { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 10px 8px 8px; border-radius: 16px; }
+  .src.active { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .24), inset 0 0 0 1px rgba(246, 169, 203, .45), 0 10px 26px var(--shade); }
+  .src img, .src .ph { width: 54px; height: 54px; border-radius: 12px; object-fit: cover; display: block; box-shadow: 0 4px 10px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(255, 255, 255, .12); }
+  .src .ph { background: linear-gradient(135deg, #3b4a66, #1d2433); }
+  .src .txt { min-width: 0; }
+  .src b, .src .line { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .src .line { color: var(--ink-soft); font-size: 13px; }
+  .src .who { color: var(--ink); font-weight: 600; }
+  .src .state.on { color: var(--good); }
+  .ctl { display: flex; gap: 6px; }
+  .ctl button { width: 36px; height: 36px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
+  .ctl svg { width: 15px; height: 15px; fill: currentColor; }
+  .empty { margin: 0; padding: 4px 2px; color: var(--ink-soft); }
+
+  /* keycaps for the shortcut */
+  .keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+  .keys .group { grid-column: 1 / -1; margin: 4px 0 -2px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); }
+  .key { padding: 10px 12px; border-radius: 13px; text-align: center; font-weight: 600; }
+  .key[aria-checked="true"] { color: var(--accent-ink); background: linear-gradient(180deg, #FBC4DC, var(--accent-strong)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 0 0 1px rgba(255, 255, 255, .3), 0 6px 18px rgba(242, 125, 178, .30); }
+
+  /* layout tiles with a small picture of each layout */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tile { display: grid; gap: 10px; justify-items: center; padding: 14px 12px 12px; border-radius: 18px; text-align: center; }
+  .tile small { display: block; font-weight: 400; color: var(--ink-soft); font-size: 12px; }
+  .tile[aria-checked="true"] { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 0 0 1.5px var(--accent), 0 8px 24px rgba(242, 125, 178, .22); }
+  .mini { position: relative; width: 150px; height: 92px; }
+  .mini i { position: absolute; border-radius: 6px; background: linear-gradient(180deg, rgba(255, 255, 255, .30), rgba(255, 255, 255, .10)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28); transition: transform .45s cubic-bezier(.2, .8, .2, 1); }
+  .mini i.front { background: linear-gradient(180deg, #FBC4DC, #E86BA6); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5), 0 4px 10px rgba(0, 0, 0, .3); }
+  .mini i.dot { border-radius: 50%; width: 9px; height: 9px; background: rgba(255, 255, 255, .55); box-shadow: none; }
+  .mini i.pill { border-radius: 99px; height: 7px; width: 26px; background: rgba(255, 255, 255, .4); box-shadow: none; }
+  .tile:hover .mini.v i.up { transform: translateY(-3px); }
+  .tile:hover .mini.v i.dn { transform: translateY(3px); }
+  .tile:hover .mini.h i.lf { transform: translateX(-3px); }
+  .tile:hover .mini.h i.rt { transform: translateX(3px); }
+
+  /* glass switches */
+  .opt { display: flex; align-items: center; gap: 14px; }
+  .opt span { flex: 1; }
+  .opt small { display: block; color: var(--ink-soft); font-size: 13px; }
+  .switch { flex: none; width: 50px; height: 30px; padding: 0; border-radius: 99px; position: relative; }
+  .switch::before { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff, #E9EEF6 60%, #C9D2E0); box-shadow: 0 2px 6px rgba(0, 0, 0, .35), inset 0 -1px 2px rgba(0, 0, 0, .15); transition: transform .25s cubic-bezier(.2, .8, .2, 1); }
+  .switch[aria-checked="true"] { background: linear-gradient(180deg, #FBC4DC, var(--accent-strong)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), inset 0 0 0 1px rgba(255, 255, 255, .25), 0 4px 14px rgba(242, 125, 178, .3); }
+  .switch[aria-checked="true"]::before { transform: translateX(20px); }
+
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=text] { flex: 1 1 240px; min-width: 0; font: 13px ui-monospace, Consolas, monospace; color: var(--ink); border: 0; border-radius: 12px; padding: 10px 12px;
+    background: rgba(0, 0, 0, .28); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .35), inset 0 0 0 1px var(--rim); }
+  .status { margin: 0; min-height: 1.5em; color: var(--ink-soft); }
+  .status:empty { min-height: 0; }
+  .status.ok { color: var(--good); }
+  .status.err { color: var(--warn); }
+  .pill { display: inline-flex; align-items: center; gap: 7px; font: 500 12.5px var(--font); color: var(--ink-soft); padding: 3px 10px 3px 8px; border-radius: 99px; box-shadow: inset 0 0 0 1px var(--rim); }
+  .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #5B6680; }
+  .pill.on { color: var(--good); }
+  .pill.on::before { background: var(--good); box-shadow: 0 0 10px rgba(142, 230, 194, .8); }
+  .hid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 10px 9px 14px; border-radius: 14px; }
+  .hid b, .hid span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hid span { color: var(--ink-soft); font-size: 13px; }
+  footer { color: var(--ink-faint); font-size: 12.5px; padding: 0 4px; }
+
+  /* calm entrance */
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  main > * { animation: rise .5s cubic-bezier(.2, .8, .2, 1) both; }
+  main > *:nth-child(2) { animation-delay: .04s; } main > *:nth-child(3) { animation-delay: .08s; } main > *:nth-child(4) { animation-delay: .12s; }
+  main > *:nth-child(5) { animation-delay: .16s; } main > *:nth-child(n+6) { animation-delay: .2s; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    #liquid { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="ambient" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
+<div id="liquid" aria-hidden="true"></div>
+<main>
+  <header>
+    <img src="skipdat.png" alt="">
+    <div>
+      <h1>Skip Dat</h1>
+      <p class="lede">Every music app's queue, one <kbd class="trig">Alt</kbd> + scroll away.</p>
+    </div>
+    <span class="ver" id="ver"></span>
+  </header>
+
+  <section class="glass" aria-labelledby="h-now">
+    <h2 id="h-now">Playing now</h2>
+    <div class="list" id="sources"><p class="empty">Looking for music…</p></div>
+  </section>
+
+  <section class="glass" aria-labelledby="h-key">
+    <h2 id="h-key">Shortcut <span class="sub">hold it and scroll</span></h2>
+    <div class="keys" role="radiogroup" aria-labelledby="h-key" id="keys">
+      <span class="group">Keyboard</span>
+      <button type="button" class="key" role="radio" data-trigger="alt">Alt</button>
+      <button type="button" class="key" role="radio" data-trigger="ctrl">Ctrl</button>
+      <button type="button" class="key" role="radio" data-trigger="shift">Shift</button>
+      <button type="button" class="key" role="radio" data-trigger="win">Windows key</button>
+      <button type="button" class="key" role="radio" data-trigger="ctrl+alt">Ctrl + Alt</button>
+      <button type="button" class="key" role="radio" data-trigger="ctrl+shift">Ctrl + Shift</button>
+      <button type="button" class="key" role="radio" data-trigger="alt+shift">Alt + Shift</button>
+      <span class="group">Mouse</span>
+      <button type="button" class="key" role="radio" data-trigger="mouse-right">Right button</button>
+      <button type="button" class="key" role="radio" data-trigger="mouse-back">Back button</button>
+      <button type="button" class="key" role="radio" data-trigger="mouse-forward">Forward button</button>
+    </div>
+    <p class="muted" id="trigger-hint" hidden>A plain click or drag with that button still works as usual. It only becomes the shortcut when you scroll while holding it.</p>
+    <p class="status" id="key-status" role="status"></p>
+    <ul>
+      <li>Hold <kbd class="trig">Alt</kbd> and scroll anywhere: the wheel opens by your cursor. One notch is one song.</li>
+      <li>Let go to play the song in front. If you stayed on the song that's playing, nothing changes.</li>
+      <li>While holding: click a song to play it, use <b>⏮ ⏯ ⏭</b>, or click another app's name to switch to it.</li>
+      <li>Arrow keys move between songs and apps, <kbd>Space</kbd> plays or pauses, <kbd>Enter</kbd> plays the song in front.</li>
+      <li><kbd>Esc</kbd> or a click anywhere else closes it without changing anything.</li>
+    </ul>
+  </section>
+
+  <section class="glass" aria-labelledby="h-layout">
+    <h2 id="h-layout">Layout</h2>
+    <div class="tiles" role="radiogroup" aria-labelledby="h-layout" id="tiles">
+      <button type="button" class="tile" role="radio" data-layout="vertical">
+        <span class="mini v" aria-hidden="true">
+          <i class="up" style="left:44px;top:4px;width:40px;height:22px"></i>
+          <i class="front" style="left:40px;top:28px;width:48px;height:38px"></i>
+          <i class="dn" style="left:44px;top:68px;width:40px;height:22px"></i>
+          <i class="pill" style="left:104px;top:30px"></i><i class="pill" style="left:104px;top:41px"></i>
+          <i class="dot" style="left:104px;top:56px"></i><i class="dot" style="left:116px;top:56px"></i><i class="dot" style="left:128px;top:56px"></i>
+        </span>
+        <span>Vertical<small>The wheel beside your cursor</small></span>
+      </button>
+      <button type="button" class="tile" role="radio" data-layout="horizontal">
+        <span class="mini h" aria-hidden="true">
+          <i class="pill" style="left:34px;top:4px"></i><i class="pill" style="left:62px;top:4px"></i><i class="pill" style="left:90px;top:4px"></i>
+          <i class="lf" style="left:12px;top:24px;width:34px;height:40px"></i>
+          <i class="rt" style="left:104px;top:24px;width:34px;height:40px"></i>
+          <i class="front" style="left:50px;top:18px;width:50px;height:52px"></i>
+          <i class="dot" style="left:58px;top:78px"></i><i class="dot" style="left:71px;top:78px"></i><i class="dot" style="left:84px;top:78px"></i>
+        </span>
+        <span>Horizontal<small>A row of songs above it</small></span>
+      </button>
+    </div>
+    <p class="status" id="layout-status" role="status"></p>
+  </section>
+
+  <section class="glass" aria-labelledby="h-ext">
+    <h2 id="h-ext">Browser companion <span class="pill" id="ext-pill">Not connected</span></h2>
+    <p class="muted">For YouTube Music, YouTube and SoundCloud in Chrome, Edge, Brave or Opera: it lets Skip Dat see their whole queue (mixes and radio included) and play any song in it. Without it, music in your browser still shows up, but only the song that's on.</p>
+    <ol>
+      <li>Open <code>chrome://extensions</code> <button type="button" id="copy-ext">Copy</button> in a new tab (Edge: <code>edge://extensions</code>).</li>
+      <li>Turn on <b>Developer mode</b>.</li>
+      <li>Click <b>Load unpacked</b> and choose the <b>browser-companion</b> folder. <button type="button" id="open-folder">Show folder</button></li>
+      <li>Reload any music tab that's already open.</li>
+    </ol>
+    <p class="muted" id="ext-folder"></p>
+    <p class="status" id="ext-status" role="status"></p>
+  </section>
+
+  <section class="glass" aria-labelledby="h-hidden" id="hidden-box" hidden>
+    <h2 id="h-hidden">Not shown in the wheel</h2>
+    <p class="muted">Skip Dat only shows music. These are playing something it doesn't count as music, like chat apps, social video or ordinary YouTube videos.</p>
+    <div class="list" id="hidden"></div>
+  </section>
+
+  <section class="glass" aria-labelledby="h-opt">
+    <h2 id="h-opt">Options</h2>
+    <div class="opt"><span id="l-pause">Pause other music when I pick a song<small>So only one thing plays at a time.</small></span><button type="button" class="switch" role="switch" id="pause-others" aria-labelledby="l-pause"></button></div>
+    <div class="opt"><span id="l-auto">Start with Windows<small>Skip Dat waits in the tray, ready for the shortcut.</small></span><button type="button" class="switch" role="switch" id="autostart" aria-labelledby="l-auto"></button></div>
+    <p class="status" id="opt-status" role="status"></p>
+  </section>
+
+  <details class="glass" id="adv">
+    <summary>Spotify's upcoming songs <small>optional</small></summary>
+    <p class="muted">Windows doesn't share what Spotify plays next. To see it, connect a Spotify developer app (Spotify requires its owner to have Premium).</p>
+    <ol>
+      <li>Open the <a href="#" id="dash">Spotify developer dashboard</a>, create an app (any name), tick <b>Web API</b>.</li>
+      <li>Add this Redirect URI: <code id="redirect">http://127.0.0.1:8898/callback</code> <button type="button" id="copy-redirect">Copy</button></li>
+      <li>Paste the app's Client ID, then connect.</li>
+    </ol>
+    <div class="row">
+      <input type="text" id="client" placeholder="Client ID" aria-label="Spotify Client ID" autocomplete="off" spellcheck="false">
+      <button type="button" class="primary" id="connect">Connect</button>
+      <button type="button" id="disconnect" hidden>Disconnect</button>
+    </div>
+    <p class="status" id="status" role="status"></p>
+  </details>
+
+  <footer id="cfg"></footer>
+</main>
+<script>
+(() => {
+  const T = window.__TAURI__;
+  const invoke = (c, a) => T ? T.core.invoke(c, a) : Promise.reject(new Error('Open this from the Skip Dat app.'));
+  const artUrl = id => (T && T.core.convertFileSrc ? T.core.convertFileSrc(id, 'skipart') : id);
+  const $ = id => document.getElementById(id);
+  const say = (el, msg, kind) => { el.textContent = msg; el.className = 'status' + (kind ? ' ' + kind : ''); };
+  const ICON = {
+    previous: '<svg viewBox="0 0 24 24"><path d="M6 5h2.4v14H6zM18.6 5.7v12.6c0 .7-.8 1.1-1.3.7l-8.6-6.3a.9.9 0 0 1 0-1.4l8.6-6.3c.5-.4 1.3 0 1.3.7z"/></svg>',
+    next: '<svg viewBox="0 0 24 24"><path d="M15.6 5H18v14h-2.4zM5.4 5.7v12.6c0 .7.8 1.1 1.3.7l8.6-6.3a.9.9 0 0 0 0-1.4L6.7 5c-.5-.4-1.3 0-1.3.7z"/></svg>',
+    play: '<svg viewBox="0 0 24 24"><path d="M7 4.9v14.2c0 .8.9 1.3 1.6.8l11-7.1a1 1 0 0 0 0-1.6l-11-7.1C7.9 3.6 7 4.1 7 4.9z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24"><path d="M6.5 4.5h3.6v15H6.5zM13.9 4.5h3.6v15h-3.6z"/></svg>',
+  };
+  const KEY_LABEL = { alt: 'Alt', ctrl: 'Ctrl', shift: 'Shift', win: 'Win', 'ctrl+alt': 'Ctrl + Alt', 'ctrl+shift': 'Ctrl + Shift', 'alt+shift': 'Alt + Shift',
+    'mouse-right': 'Right button', 'mouse-back': 'Back button', 'mouse-forward': 'Forward button' };
+  const keys = [...document.querySelectorAll('.key')], tiles = [...document.querySelectorAll('.tile')];
+  function showTrigger(t) {
+    document.querySelectorAll('.trig').forEach(k => { k.textContent = KEY_LABEL[t] || 'Alt'; });
+    keys.forEach(k => k.setAttribute('aria-checked', String(k.dataset.trigger === t)));
+    $('trigger-hint').hidden = !t.startsWith('mouse-');
+  }
+  function showLayout(l) { tiles.forEach(x => x.setAttribute('aria-checked', String(x.dataset.layout === l))); }
+  const setSwitch = (el, on) => el.setAttribute('aria-checked', String(!!on));
+
+  // ---- playing now ----
+  let lastSources = '';
+  function renderSources(view) {
+    const box = $('sources');
+    const list = (view && view.sources) || [];
+    renderHidden(view);
+    const key = JSON.stringify([list.map(s => [s.key, s.name, s.via, s.playing, (s.items.find(i => i.rel === 0) || {}).key, (s.items.find(i => i.rel === 0) || {}).art]), view && view.active]);
+    if (key === lastSources) return;
+    lastSources = key;
+    if (!list.length) { box.innerHTML = '<p class="empty">No music is playing. Start a song in Spotify, YouTube Music, SoundCloud, Apple Music or another music app and it shows up here.</p>'; return; }
+    box.textContent = '';
+    for (const s of list) {
+      const now = s.items.find(i => i.rel === 0) || { title: '', artist: '' };
+      const row = document.createElement('div'); row.className = 'src glass' + (view.active === s.key ? ' active' : '');
+      const pic = now.art ? Object.assign(document.createElement('img'), { src: artUrl(now.art), alt: '' }) : Object.assign(document.createElement('div'), { className: 'ph' });
+      const txt = document.createElement('div'); txt.className = 'txt';
+      const b = document.createElement('b'); b.textContent = now.title || s.name;
+      const line = document.createElement('span'); line.className = 'line';
+      const who = document.createElement('span'); who.className = 'who'; who.textContent = s.name + (s.via ? ' in ' + s.via : '');
+      const st = document.createElement('span'); st.className = 'state' + (s.playing ? ' on' : ''); st.textContent = s.playing ? 'Playing' : 'Paused';
+      line.append(now.artist ? now.artist + ' · ' : '', who, ' · ', st);
+      txt.append(b, line);
+      const ctl = document.createElement('div'); ctl.className = 'ctl';
+      for (const act of ['previous', s.playing ? 'pause' : 'play', 'next']) {
+        const btn = document.createElement('button'); btn.type = 'button';
+        btn.innerHTML = ICON[act];
+        btn.setAttribute('aria-label', act[0].toUpperCase() + act.slice(1) + ' ' + s.name);
+        btn.addEventListener('click', () => invoke('media_control', { source: s.key, action: act }));
+        ctl.append(btn);
+      }
+      row.append(pic, txt, ctl);
+      box.append(row);
+    }
+  }
+  let lastHidden = '';
+  function renderHidden(view) {
+    const list = (view && view.hidden) || [];
+    const key = JSON.stringify(list);
+    if (key === lastHidden) return;
+    lastHidden = key;
+    $('hidden-box').hidden = !list.length;
+    const box = $('hidden'); box.textContent = '';
+    for (const h of list) {
+      const row = document.createElement('div'); row.className = 'hid glass';
+      const txt = document.createElement('div');
+      const b = document.createElement('b'); b.textContent = h.name;
+      const sp = document.createElement('span'); sp.textContent = h.title || 'Playing audio';
+      txt.append(b, sp);
+      const btn = document.createElement('button'); btn.type = 'button';
+      btn.textContent = h.allowed ? 'Hide again' : 'Show anyway';
+      btn.addEventListener('click', async () => { await invoke('settings_allow', { id: h.id, on: !h.allowed }); lastHidden = ''; poll(); });
+      row.append(txt, btn);
+      box.append(row);
+    }
+  }
+
+  // ---- settings ----
+  async function refresh() {
+    try {
+      const s = await invoke('settings_get');
+      showTrigger(s.trigger);
+      showLayout(s.layout || 'vertical');
+      setSwitch($('pause-others'), s.pause_others);
+      setSwitch($('autostart'), s.autostart);
+      if (document.activeElement !== $('client')) $('client').value = s.client_id || '';
+      $('redirect').textContent = s.redirect_uri;
+      $('disconnect').hidden = !s.spotify_connected;
+      $('connect').textContent = s.spotify_connected ? 'Reconnect' : 'Connect';
+      if (s.spotify_connected && !$('status').textContent) say($('status'), 'Connected. Spotify shows its upcoming songs in the wheel.', 'ok');
+      const c = s.companion;
+      const on = c.last_seen !== null && c.last_seen < 120;
+      $('ext-pill').className = 'pill' + (on ? ' on' : '');
+      $('ext-pill').textContent = on ? 'Connected' : 'Not connected';
+      $('ext-folder').textContent = '';
+      $('ext-folder').append('Folder: ', Object.assign(document.createElement('code'), { textContent: c.folder }));
+      if (c.error) say($('ext-status'), c.error, 'err');
+      else if (!c.folder_exists) say($('ext-status'), 'The browser-companion folder is missing. Reinstall Skip Dat to get it back.', 'err');
+      else if (on) say($('ext-status'), 'Your music tabs are talking to Skip Dat.', 'ok');
+      else if ($('ext-status').className.includes('ok')) say($('ext-status'), '');
+      $('ver').textContent = 'Version ' + s.version;
+      $('cfg').textContent = 'Settings are saved in ' + s.config_file;
+    } catch (e) { say($('opt-status'), String(e), 'err'); }
+  }
+  keys.forEach(k => k.addEventListener('click', async () => {
+    const t = k.dataset.trigger;
+    try { await invoke('settings_set_trigger', { trigger: t }); showTrigger(t); say($('key-status'), 'Saved. Hold ' + (KEY_LABEL[t] || t) + ' and scroll.', 'ok'); }
+    catch (err) { say($('key-status'), String(err), 'err'); refresh(); }
+  }));
+  tiles.forEach(x => x.addEventListener('click', async () => {
+    const l = x.dataset.layout;
+    try { await invoke('settings_set_layout', { layout: l }); showLayout(l); say($('layout-status'), l === 'horizontal' ? 'Saved. The wheel now opens as a row.' : 'Saved. The wheel now opens beside your cursor.', 'ok'); }
+    catch (err) { say($('layout-status'), String(err), 'err'); refresh(); }
+  }));
+  $('pause-others').addEventListener('click', e => {
+    const el = e.currentTarget, on = el.getAttribute('aria-checked') !== 'true';
+    setSwitch(el, on);
+    invoke('settings_set_pause_others', { on }).catch(err => { setSwitch(el, !on); say($('opt-status'), String(err), 'err'); });
+  });
+  $('autostart').addEventListener('click', async e => {
+    const el = e.currentTarget, on = el.getAttribute('aria-checked') !== 'true';
+    setSwitch(el, on);
+    try { await invoke('settings_set_autostart', { on }); say($('opt-status'), on ? 'Skip Dat will start with Windows.' : 'Skip Dat will not start with Windows.', 'ok'); }
+    catch (err) { setSwitch(el, !on); say($('opt-status'), 'Could not change Start with Windows: ' + err, 'err'); }
+  });
+  async function copy(text, statusEl, what) {
+    try { await navigator.clipboard.writeText(text); say(statusEl, what + ' copied.', 'ok'); }
+    catch (_) { say(statusEl, 'Copy this: ' + text); }
+  }
+  $('copy-ext').addEventListener('click', () => copy('chrome://extensions', $('ext-status'), 'Address'));
+  $('open-folder').addEventListener('click', () => invoke('open_companion_folder').catch(err => say($('ext-status'), String(err), 'err')));
+  $('dash').addEventListener('click', e => { e.preventDefault(); invoke('open_url', { url: 'https://developer.spotify.com/dashboard' }).catch(err => say($('status'), String(err), 'err')); });
+  $('copy-redirect').addEventListener('click', () => copy($('redirect').textContent, $('status'), 'Redirect URI'));
+  $('connect').addEventListener('click', async () => {
+    const id = $('client').value.trim();
+    if (!/^[0-9a-f]{32}$/i.test(id)) { say($('status'), 'A Client ID is 32 letters and numbers. Check that you copied all of it.', 'err'); return; }
+    await invoke('settings_set_client_id', { clientId: id });
+    $('connect').disabled = true; say($('status'), 'Waiting for you to approve in the browser…');
+    try { await invoke('spotify_connect'); say($('status'), 'Connected. Spotify shows its upcoming songs in the wheel.', 'ok'); }
+    catch (e) { say($('status'), String(e), 'err'); }
+    finally { $('connect').disabled = false; refresh(); }
+  });
+  $('disconnect').addEventListener('click', async () => { await invoke('spotify_disconnect'); say($('status'), 'Disconnected.'); refresh(); });
+  if (T) T.event.listen('lg-media', e => renderSources(e.payload));
+  const poll = () => invoke('get_view').then(renderSources).catch(() => renderSources(null));
+  refresh(); poll();
+  // the companion's status is refreshed now and then while this window is on screen
+  setInterval(() => { if (!document.hidden) refresh(); }, 3000);
+
+  // ---- the liquid drop and the light on the glass under the cursor ----
+  // Runs only while something is moving: the loop stops itself once the drop settles, and does
+  // nothing with reduced motion or while the window is hidden.
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  const drop = $('liquid');
+  let tx = 0, ty = 0, x = 0, y = 0, vx = 0, vy = 0, raf = 0, last = 0, lit = null, seen = false;
+  function step(now) {
+    raf = 0;
+    const dt = Math.min(0.05, (now - (last || now)) / 1000) || 0.016; last = now;
+    // a soft spring: it trails the cursor and settles without much bounce
+    const k = 90, damp = 15;
+    vx += ((tx - x) * k - vx * damp) * dt; vy += ((ty - y) * k - vy * damp) * dt;
+    x += vx * dt; y += vy * dt;
+    const speed = Math.hypot(vx, vy), stretch = Math.min(speed / 2600, 0.28), ang = Math.atan2(vy, vx);
+    drop.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${ang.toFixed(3)}rad) scale(${(1 + stretch).toFixed(3)}, ${(1 - stretch * 0.6).toFixed(3)})`;
+    if (Math.abs(tx - x) > 0.3 || Math.abs(ty - y) > 0.3 || speed > 2) raf = requestAnimationFrame(step);
+    else last = 0;
+  }
+  function light(e) {
+    const g = e.target.closest && e.target.closest('.glass');
+    if (g !== lit) { if (lit) lit.classList.remove('lit'); lit = g; if (g) g.classList.add('lit'); }
+    if (g) { const r = g.getBoundingClientRect(); g.style.setProperty('--mx', (e.clientX - r.left) + 'px'); g.style.setProperty('--my', (e.clientY - r.top) + 'px'); }
+  }
+  addEventListener('pointermove', e => {
+    if (still.matches || document.hidden) return;
+    tx = e.clientX; ty = e.clientY;
+    if (!seen) { seen = true; x = tx; y = ty; }
+    drop.classList.add('on');
+    light(e);
+    if (!raf) raf = requestAnimationFrame(step);
+  }, { passive: true });
+  document.documentElement.addEventListener('pointerleave', () => { drop.classList.remove('on'); if (lit) { lit.classList.remove('lit'); lit = null; } });
+  addEventListener('blur', () => drop.classList.remove('on'));
+  document.addEventListener('visibilitychange', () => { if (document.hidden && raf) { cancelAnimationFrame(raf); raf = 0; last = 0; } });
+  window.__settingsFx = { running: () => !!raf, litId: () => (lit ? (lit.getAttribute('aria-labelledby') || lit.className) : null) };
+})();
+</script>
+</body>
+</html>

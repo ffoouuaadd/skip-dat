@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skip Dat</title>
+<style>
+  :root {
+    --ink: #FAFBFD;
+    --ink-soft: rgba(250, 251, 253, .76);
+    --font: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  body { font-family: var(--font); color: var(--ink); -webkit-user-select: none; user-select: none; cursor: default; }
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #ui { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .t { position: absolute; left: 0; top: 0; margin: 0; transform-origin: 0 0; white-space: nowrap; visibility: hidden;
+       text-shadow: 0 1px 2px rgba(0, 0, 0, .3); max-width: 236px; overflow: hidden; text-overflow: ellipsis; }
+  .t-title { font-weight: 650; font-size: 21px; line-height: 1.15; letter-spacing: -.005em; }
+  .t-artist { font-weight: 400; font-size: 15px; line-height: 1.2; color: var(--ink-soft); }
+  .eq { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 3px; height: 22px; transform-origin: 0 0; opacity: 0; }
+  .eq i { display: block; width: 4px; border-radius: 2px; background: var(--ink); }
+  /* the rail beside the wheel */
+  .chip { position: absolute; left: 0; top: 0; transform-origin: 0 0; visibility: hidden; display: flex; align-items: center; gap: 8px;
+          width: 128px; height: 20px; font-size: 14px; font-weight: 600; letter-spacing: .005em; text-shadow: 0 1px 2px rgba(0, 0, 0, .3); }
+  .chip .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip .mark { width: 11px; height: 12px; flex: none; display: flex; align-items: center; justify-content: center; gap: 1.5px; }
+  .chip .mark i { display: block; width: 2.5px; height: 3px; border-radius: 1.5px; background: var(--ink); }
+  .chip.dot .mark i, .chip.dim .mark i { display: none; }
+  .chip.dot .mark i:first-child, .chip.dim .mark i:first-child { display: block; width: 6px; height: 6px; border-radius: 3px; }
+  .chip.dim .mark i:first-child { opacity: .55; }
+  .chip.off .mark { visibility: hidden; }
+  .ctl { position: absolute; left: 0; top: 0; transform-origin: 0 0; visibility: hidden; width: 18px; height: 18px; filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .35)); }
+  .ctl svg { display: block; width: 18px; height: 18px; fill: var(--ink); }
+  .note { position: absolute; left: 0; top: 0; margin: 0; transform-origin: 0 0; visibility: hidden; width: 136px; text-align: center;
+          font-size: 11.5px; font-weight: 500; line-height: 1.3; color: var(--ink); text-shadow: 0 1px 2px rgba(0, 0, 0, .4); }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="ui" aria-hidden="true"></div>
+<script src="overlay.js"></script>
+</body>
+</html>
