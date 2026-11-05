@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{json, Value};
+use crate::util::Lock;
 
 pub const PORT: u16 = 47231;
 /// A paused tab in the background may only be heard from about once a minute (browsers throttle
@@ -64,6 +65,12 @@ pub struct Report {
     pub index: i64,
     #[serde(default)]
     pub can_jump: bool,
+    /// the page address of the song playing (to play it again from the history)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// the page's shuffle is on
+    #[serde(default)]
+    pub shuffle: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -89,7 +96,7 @@ static STATE: Mutex<Option<State>> = Mutex::new(None);
 static CV: Condvar = Condvar::new();
 
 fn with<R>(f: impl FnOnce(&mut State) -> R) -> R {
-    let mut g = STATE.lock().unwrap();
+    let mut g = STATE.guard();
     f(g.get_or_insert_with(State::default))
 }
 
@@ -210,7 +217,7 @@ pub fn upsert(r: Report) -> (Vec<Value>, bool) {
 /// Hold a tab's long-poll until a command for it arrives (or `max` passes).
 fn wait_commands(key: &str, nonce: u64, max: Duration) -> Vec<Value> {
     let deadline = Instant::now() + max;
-    let mut g = STATE.lock().unwrap();
+    let mut g = STATE.guard();
     {
         let s = g.get_or_insert_with(State::default);
         s.waiters.insert(key.to_string(), nonce);
@@ -234,7 +241,7 @@ fn wait_commands(key: &str, nonce: u64, max: Duration) -> Vec<Value> {
         if now >= deadline {
             return Vec::new();
         }
-        g = CV.wait_timeout(g, deadline - now).unwrap().0;
+        g = CV.wait_timeout(g, deadline - now).unwrap_or_else(std::sync::PoisonError::into_inner).0;
     }
 }
 

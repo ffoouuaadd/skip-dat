@@ -64,7 +64,12 @@
   header img { width: 58px; height: 58px; flex: none; filter: drop-shadow(0 8px 16px rgba(0, 0, 0, .35)); }
   h1 { margin: 0; font: 650 27px/1.1 var(--display); letter-spacing: -.012em; }
   .lede { margin: 3px 0 0; color: var(--ink-soft); }
-  .ver { margin-left: auto; align-self: flex-start; font-size: 12px; color: var(--ink-faint); padding: 3px 10px; border-radius: 99px; box-shadow: inset 0 0 0 1px var(--rim); white-space: nowrap; }
+  header .side { margin-left: auto; align-self: flex-start; flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  button.coffee { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; flex: none; padding: 6px 12px 6px 10px; border-radius: 99px; font: 600 12.5px var(--font);
+            color: #2b1600; background: linear-gradient(180deg, #ffe680, #ffc93d); box-shadow: 0 4px 14px rgba(255, 196, 40, .28), inset 0 1px 0 rgba(255, 255, 255, .7), inset 0 0 0 1px rgba(120, 70, 0, .25); }
+  button.coffee svg { width: 16px; height: 16px; fill: currentColor; }
+  button.coffee:hover { background: linear-gradient(180deg, #fff0a8, #ffd25a); box-shadow: 0 6px 18px rgba(255, 196, 40, .38), inset 0 1px 0 rgba(255, 255, 255, .8), inset 0 0 0 1px rgba(120, 70, 0, .3); }
+  .ver { font-size: 12px; color: var(--ink-faint); padding: 3px 10px; border-radius: 99px; box-shadow: inset 0 0 0 1px var(--rim); white-space: nowrap; }
 
   section.glass, details.glass { padding: 16px 18px; display: grid; gap: 12px; }
   details.glass:not([open]) { display: block; }
@@ -131,6 +136,41 @@
   .tile:hover .mini.h i.lf { transform: translateX(-3px); }
   .tile:hover .mini.h i.rt { transform: translateX(3px); }
 
+  h3 { margin: 4px 0 0; font: 600 13px var(--font); color: var(--ink-soft); letter-spacing: .01em; }
+  h3 .sub { font-weight: 400; color: var(--ink-faint); margin-left: 6px; }
+  h2 .small { margin-left: auto; padding: 6px 12px; font-size: 12.5px; border-radius: 99px; }
+  .tiles.four .tile { padding: 12px 10px 10px; }
+  .tiles.four .mini { transform: scale(.86); margin: -6px 0; }
+  /* five styles: three on top, two below */
+  .tiles.five { grid-template-columns: repeat(6, 1fr); }
+  .tiles.five .tile { grid-column: span 2; }
+  .tiles.five .tile:nth-child(n+4) { grid-column: span 3; }
+  .tiles.five .mini { transform: scale(.8); margin: -9px -15px; }
+  .tile:hover .mini.orbit i.ring { transform: translateY(-3px); }
+  .mini.flow { perspective: 160px; }
+  .mini.flow i.lf { transform: rotateY(48deg); }
+  .mini.flow i.rt { transform: rotateY(-48deg); }
+  .tile:hover .mini.flow i.lf { transform: rotateY(48deg) translateX(-3px); }
+  .tile:hover .mini.flow i.rt { transform: rotateY(-48deg) translateX(3px); }
+  #wheel-dir[hidden] { display: none; }
+  #wheel-dir { display: grid; gap: 10px; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .slider { display: grid; grid-template-columns: 52px 1fr 44px; align-items: center; gap: 12px; }
+  .slider output { text-align: right; color: var(--ink-soft); font-variant-numeric: tabular-nums; font-size: 13px; }
+  input[type=range] { -webkit-appearance: none; appearance: none; height: 30px; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--accent-strong) 0 var(--v, 50%), rgba(255, 255, 255, .14) var(--v, 50%)); box-shadow: inset 0 0 0 1px var(--rim); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -8px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff, #E9EEF6 60%, #C9D2E0); box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+  /* skins: a little card in each skin's own colours */
+  .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .skin { display: grid; gap: 8px; padding: 10px; border-radius: 16px; text-align: left; }
+  .skin[aria-checked="true"] { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 0 0 1.5px var(--accent), 0 8px 24px rgba(242, 125, 178, .22); }
+  .skin .sw { height: 54px; border-radius: 10px; position: relative; overflow: hidden; display: flex; align-items: flex-end; padding: 6px 8px; box-sizing: border-box; }
+  .skin .sw b { font-size: 13px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .skin .sw i { position: absolute; right: 8px; top: 8px; width: 18px; height: 18px; border-radius: 50%; }
+  .skin small { display: block; color: var(--ink-soft); font-size: 12px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .skin small.err { color: var(--warn); white-space: normal; }
+
   /* glass switches */
   .opt { display: flex; align-items: center; gap: 14px; }
   .opt span { flex: 1; }
@@ -178,11 +218,17 @@
       <h1>Skip Dat</h1>
       <p class="lede">Every music app's queue, one <kbd class="trig">Alt</kbd> + scroll away.</p>
     </div>
-    <span class="ver" id="ver"></span>
+    <div class="side">
+      <span class="ver" id="ver"></span>
+      <button type="button" class="coffee" id="coffee" title="buymeacoffee.com/ffoouuaadd">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13v5.5A5.5 5.5 0 0 1 11.5 19h-2A5.5 5.5 0 0 1 4 13.5zm13 1.5h1.3a2.7 2.7 0 0 1 0 5.4H17v-1.8h1.3a.9.9 0 0 0 0-1.8H17zM7.2 3.6c.5.7.5 1.3 0 2 -.3.4-.3.8 0 1.2l-1.2.8c-.7-.9-.7-2 0-2.9.2-.3.2-.6 0-.9zm3.5 0c.5.7.5 1.3 0 2-.3.4-.3.8 0 1.2l-1.2.8c-.7-.9-.7-2 0-2.9.2-.3.2-.6 0-.9z"/></svg>
+        Buy me a coffee
+      </button>
+    </div>
   </header>
 
   <section class="glass" aria-labelledby="h-now">
-    <h2 id="h-now">Playing now</h2>
+    <h2 id="h-now">Playing now <button type="button" class="small" id="open-history">What was I playing?</button></h2>
     <div class="list" id="sources"><p class="empty">Looking for music…</p></div>
   </section>
 
@@ -214,8 +260,65 @@
   </section>
 
   <section class="glass" aria-labelledby="h-layout">
-    <h2 id="h-layout">Layout</h2>
-    <div class="tiles" role="radiogroup" aria-labelledby="h-layout" id="tiles">
+    <h2 id="h-layout">Look</h2>
+    <h3 id="h-style">Style</h3>
+    <div class="tiles four five" role="radiogroup" aria-labelledby="h-style" id="styles">
+      <button type="button" class="tile" role="radio" data-style="wheel">
+        <span class="mini v" aria-hidden="true">
+          <i class="up" style="left:44px;top:4px;width:40px;height:22px"></i>
+          <i class="front" style="left:40px;top:28px;width:48px;height:38px"></i>
+          <i class="dn" style="left:44px;top:68px;width:40px;height:22px"></i>
+          <i class="pill" style="left:104px;top:30px"></i><i class="pill" style="left:104px;top:41px"></i>
+          <i class="dot" style="left:104px;top:56px"></i><i class="dot" style="left:116px;top:56px"></i>
+        </span>
+        <span>Wheel<small>Cards on a turning drum</small></span>
+      </button>
+      <button type="button" class="tile" role="radio" data-style="stack">
+        <span class="mini v" aria-hidden="true">
+          <i class="up" style="left:48px;top:2px;width:34px;height:20px;opacity:.6"></i>
+          <i class="front" style="left:40px;top:24px;width:50px;height:40px"></i>
+          <i class="dn" style="left:44px;top:66px;width:42px;height:22px;opacity:.8"></i>
+          <i class="pill" style="left:104px;top:34px"></i><i class="dot" style="left:104px;top:50px"></i>
+        </span>
+        <span>Stack<small>A flat list of cards</small></span>
+      </button>
+      <button type="button" class="tile" role="radio" data-style="coverflow">
+        <span class="mini h flow" aria-hidden="true">
+          <i class="lf" style="left:14px;top:26px;width:38px;height:40px"></i>
+          <i class="rt" style="left:98px;top:26px;width:38px;height:40px"></i>
+          <i class="front" style="left:50px;top:18px;width:50px;height:52px"></i>
+          <i class="dot" style="left:62px;top:78px"></i><i class="dot" style="left:75px;top:78px"></i>
+        </span>
+        <span>Cover flow<small>A row, turned to face you</small></span>
+      </button>
+      <button type="button" class="tile" role="radio" data-style="orbit">
+        <span class="mini orbit" aria-hidden="true">
+          <i class="ring" style="left:44px;top:2px;width:18px;height:20px;opacity:.5"></i>
+          <i class="ring" style="left:22px;top:12px;width:16px;height:18px;opacity:.38"></i>
+          <i class="ring" style="left:14px;top:36px;width:15px;height:18px;opacity:.3"></i>
+          <i class="ring" style="left:22px;top:60px;width:16px;height:18px;opacity:.38"></i>
+          <i class="ring" style="left:44px;top:70px;width:18px;height:20px;opacity:.5"></i>
+          <i class="ring" style="left:62px;top:56px;width:22px;height:26px;opacity:.75"></i>
+          <i class="ring" style="left:62px;top:8px;width:22px;height:26px;opacity:.75"></i>
+          <i class="front" style="left:70px;top:24px;width:40px;height:44px"></i>
+          <i class="pill" style="left:118px;top:34px"></i><i class="dot" style="left:118px;top:50px"></i>
+        </span>
+        <span>Orbit<small>A ring round your cursor</small></span>
+      </button>
+      <button type="button" class="tile" role="radio" data-style="compact">
+        <span class="mini v" aria-hidden="true">
+          <i class="up" style="left:36px;top:16px;width:60px;height:10px;opacity:.6"></i>
+          <i class="front" style="left:30px;top:32px;width:72px;height:16px"></i>
+          <i class="dn" style="left:36px;top:54px;width:60px;height:10px"></i>
+          <i class="dn" style="left:40px;top:70px;width:52px;height:8px;opacity:.6"></i>
+          <i class="dot" style="left:112px;top:36px"></i>
+        </span>
+        <span>Compact<small>Just the titles, small</small></span>
+      </button>
+    </div>
+    <div id="wheel-dir">
+      <h3 id="h-dir">Wheel direction</h3>
+    <div class="tiles" role="radiogroup" id="tiles" aria-labelledby="h-dir">
       <button type="button" class="tile" role="radio" data-layout="vertical">
         <span class="mini v" aria-hidden="true">
           <i class="up" style="left:44px;top:4px;width:40px;height:22px"></i>
@@ -237,7 +340,28 @@
         <span>Horizontal<small>A row of songs above it</small></span>
       </button>
     </div>
+    </div>
+    <h3 id="h-size">Size</h3>
+    <div class="seg" role="radiogroup" aria-labelledby="h-size" id="sizes">
+      <button type="button" class="key" role="radio" data-size="small">Small</button>
+      <button type="button" class="key" role="radio" data-size="medium">Medium</button>
+      <button type="button" class="key" role="radio" data-size="large">Large</button>
+    </div>
+    <h3>Depth <span class="sub">songs away from the middle</span></h3>
+    <label class="slider"><span>Blur</span><input type="range" id="depth-blur" min="0" max="100" step="1"><output id="depth-blur-v"></output></label>
+    <label class="slider"><span>Fade</span><input type="range" id="depth-fade" min="0" max="100" step="1"><output id="depth-fade-v"></output></label>
     <p class="status" id="layout-status" role="status"></p>
+  </section>
+
+  <section class="glass" aria-labelledby="h-skin">
+    <h2 id="h-skin">Skin <span class="sub">how the carousel looks</span></h2>
+    <div class="skins" role="radiogroup" aria-labelledby="h-skin" id="skins"></div>
+    <div class="row">
+      <button type="button" id="skins-folder">Open skins folder</button>
+      <button type="button" id="skins-guide">How to make a skin</button>
+    </div>
+    <p class="muted">Skins in that folder show up here, and saving a skin's file updates the carousel straight away.</p>
+    <p class="status" id="skin-status" role="status"></p>
   </section>
 
   <section class="glass" aria-labelledby="h-ext">
@@ -261,6 +385,7 @@
 
   <section class="glass" aria-labelledby="h-opt">
     <h2 id="h-opt">Options</h2>
+    <div class="opt"><span id="l-perf">Performance mode<small>For gaming and slower PCs: no blur, glass, shadows, animations or album art. The carousel uses much less of your graphics card and processor.</small></span><button type="button" class="switch" role="switch" id="perf" aria-labelledby="l-perf"></button></div>
     <div class="opt"><span id="l-pause">Pause other music when I pick a song<small>So only one thing plays at a time.</small></span><button type="button" class="switch" role="switch" id="pause-others" aria-labelledby="l-pause"></button></div>
     <div class="opt"><span id="l-auto">Start with Windows<small>Skip Dat waits in the tray, ready for the shortcut.</small></span><button type="button" class="switch" role="switch" id="autostart" aria-labelledby="l-auto"></button></div>
     <p class="status" id="opt-status" role="status"></p>
@@ -299,7 +424,8 @@
   };
   const KEY_LABEL = { alt: 'Alt', ctrl: 'Ctrl', shift: 'Shift', win: 'Win', 'ctrl+alt': 'Ctrl + Alt', 'ctrl+shift': 'Ctrl + Shift', 'alt+shift': 'Alt + Shift',
     'mouse-right': 'Right button', 'mouse-back': 'Back button', 'mouse-forward': 'Forward button' };
-  const keys = [...document.querySelectorAll('.key')], tiles = [...document.querySelectorAll('.tile')];
+  const keys = [...document.querySelectorAll('.key[data-trigger]')], tiles = [...document.querySelectorAll('.tile[data-layout]')];
+  const styleTiles = [...document.querySelectorAll('.tile[data-style]')], sizeKeys = [...document.querySelectorAll('[data-size]')];
   function showTrigger(t) {
     document.querySelectorAll('.trig').forEach(k => { k.textContent = KEY_LABEL[t] || 'Alt'; });
     keys.forEach(k => k.setAttribute('aria-checked', String(k.dataset.trigger === t)));
@@ -370,6 +496,7 @@
       const s = await invoke('settings_get');
       showTrigger(s.trigger);
       showLayout(s.layout || 'vertical');
+      if (s.look) { skinList = s.skins || skinList; showLook(s.look); }
       setSwitch($('pause-others'), s.pause_others);
       setSwitch($('autostart'), s.autostart);
       if (document.activeElement !== $('client')) $('client').value = s.client_id || '';
@@ -401,6 +528,67 @@
     try { await invoke('settings_set_layout', { layout: l }); showLayout(l); say($('layout-status'), l === 'horizontal' ? 'Saved. The wheel now opens as a row.' : 'Saved. The wheel now opens beside your cursor.', 'ok'); }
     catch (err) { say($('layout-status'), String(err), 'err'); refresh(); }
   }));
+  // ---- look: style, size, depth, performance mode, skin ----
+  let look = null, skinList = [];
+  const pct = v => Math.round((v || 0) * 100);
+  function setSlider(el, v) { el.value = pct(v); el.style.setProperty('--v', pct(v) + '%'); $(el.id + '-v').textContent = pct(v) + '%'; }
+  function showLook(l) {
+    look = l;
+    styleTiles.forEach(x => x.setAttribute('aria-checked', String(x.dataset.style === l.style)));
+    $('wheel-dir').hidden = l.style !== 'wheel';
+    showLayout(l.layout || 'vertical');
+    sizeKeys.forEach(x => x.setAttribute('aria-checked', String(x.dataset.size === l.size)));
+    if (document.activeElement !== $('depth-blur')) setSlider($('depth-blur'), l.depth_blur);
+    if (document.activeElement !== $('depth-fade')) setSlider($('depth-fade'), l.depth_fade);
+    setSwitch($('perf'), l.perf);
+    renderSkins();
+  }
+  function renderSkins() {
+    const box = $('skins'), cur = look && look.skin ? look.skin.id : '';
+    box.textContent = '';
+    for (const sk of skinList) {
+      const d = sk.data || {}, card = d.card || {}, text = d.text || {}, btn = d.button || {};
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'skin'; b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', String(sk.id === cur)); b.disabled = !!sk.error;
+      const sw = document.createElement('span'); sw.className = 'sw';
+      sw.style.background = d.base === 'panel' ? `linear-gradient(180deg, ${card.top || '#2a2f3a'}, ${card.bottom || '#14171d'})` : 'linear-gradient(160deg, rgba(255,255,255,.28), rgba(255,255,255,.06))';
+      sw.style.boxShadow = `inset 0 0 0 ${Math.min(card.edgeWidth || 1, 3)}px ${card.edge || 'rgba(255,255,255,.3)'}`;
+      const name = document.createElement('b'); name.textContent = sk.name; name.style.color = text.color || '#fff';
+      const dot = document.createElement('i'); dot.style.background = `linear-gradient(180deg, ${btn.top || '#FBC4DC'}, ${btn.bottom || '#E86BA6'})`;
+      sw.append(name, dot);
+      const info = document.createElement('small');
+      if (sk.error) { info.className = 'err'; info.textContent = 'skin.json: ' + sk.error; }
+      else info.textContent = sk.builtin ? (sk.author ? 'Built in · ' + sk.author : 'Built in') : (sk.author ? 'by ' + sk.author : 'Your skin');
+      b.append(sw, info);
+      b.addEventListener('click', () => setLook({ skin: sk.id }, 'Saved. The carousel now uses ' + sk.name + '.'));
+      box.append(b);
+    }
+  }
+  async function setLook(patch, msg) {
+    try { await invoke('settings_set_look', { patch }); look = { ...look, ...patch }; if (msg) say(patch.skin ? $('skin-status') : $('layout-status'), msg, 'ok'); refresh(); }
+    catch (err) { say(patch.skin ? $('skin-status') : $('layout-status'), String(err), 'err'); refresh(); }
+  }
+  const STYLE_MSG = { wheel: 'Saved. Songs turn on a wheel.', stack: 'Saved. Songs stack in a flat list.', coverflow: 'Saved. Songs line up in a row.', compact: 'Saved. Just the titles, small.' };
+  styleTiles.forEach(x => x.addEventListener('click', () => setLook({ style: x.dataset.style }, STYLE_MSG[x.dataset.style])));
+  sizeKeys.forEach(x => x.addEventListener('click', () => setLook({ size: x.dataset.size }, 'Saved. ' + x.textContent + ' carousel.')));
+  for (const id of ['depth-blur', 'depth-fade']) {
+    const el = $(id), key = id.replace('-', '_');
+    el.addEventListener('input', () => setSlider(el, el.value / 100));
+    el.addEventListener('change', () => setLook({ [key]: el.value / 100 }));
+  }
+  $('perf').addEventListener('click', e => {
+    const on = e.currentTarget.getAttribute('aria-checked') !== 'true';
+    setSwitch(e.currentTarget, on);
+    setLook({ perf: on }, on ? 'Performance mode is on.' : 'Performance mode is off.').then(() => say($('opt-status'), on ? 'Performance mode is on: no blur, glass, shadows, animations or album art.' : 'Performance mode is off.', 'ok'));
+  });
+  $('open-history').addEventListener('click', () => invoke('open_history').catch(err => say($('status'), String(err), 'err')));
+  $('skins-folder').addEventListener('click', () => invoke('open_skins_folder').catch(err => say($('skin-status'), String(err), 'err')));
+  $('skins-guide').addEventListener('click', () => invoke('open_skins_guide').catch(err => say($('skin-status'), String(err), 'err')));
+  if (T) {
+    T.event.listen('lg-skins', e => { skinList = e.payload || []; renderSkins(); });
+    T.event.listen('lg-look', e => { if (e.payload) showLook(e.payload); });
+  }
+
   $('pause-others').addEventListener('click', e => {
     const el = e.currentTarget, on = el.getAttribute('aria-checked') !== 'true';
     setSwitch(el, on);
@@ -418,6 +606,8 @@
   }
   $('copy-ext').addEventListener('click', () => copy('chrome://extensions', $('ext-status'), 'Address'));
   $('open-folder').addEventListener('click', () => invoke('open_companion_folder').catch(err => say($('ext-status'), String(err), 'err')));
+  // supporting Skip Dat: opens the Buy Me a Coffee page in the browser
+  $('coffee').addEventListener('click', () => invoke('open_url', { url: 'https://buymeacoffee.com/ffoouuaadd' }).catch(err => say($('status'), String(err), 'err')));
   $('dash').addEventListener('click', e => { e.preventDefault(); invoke('open_url', { url: 'https://developer.spotify.com/dashboard' }).catch(err => say($('status'), String(err), 'err')); });
   $('copy-redirect').addEventListener('click', () => copy($('redirect').textContent, $('status'), 'Redirect URI'));
   $('connect').addEventListener('click', async () => {

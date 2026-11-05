@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Overlay and settings windows: events and the app's own commands.",
-  "windows": ["overlay", "settings"],
+  "description": "Overlay, settings and history windows: events and the app's own commands.",
+  "windows": ["overlay", "settings", "history"],
   "permissions": ["core:default"]
 }

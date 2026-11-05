@@ -1,0 +1,13 @@
+{
+  "name": "skip-dat-gif-recorder",
+  "private": true,
+  "description": "Records the README GIFs from Skip Dat's real carousel code",
+  "type": "module",
+  "scripts": {
+    "assets": "node render_assets.mjs",
+    "gifs": "node rec.mjs"
+  },
+  "dependencies": {
+    "puppeteer-core": "^25.16.0"
+  }
+}

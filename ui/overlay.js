@@ -13,7 +13,7 @@ const listen = (ev, fn) => (TAURI ? TAURI.event.listen(ev, e => { try { fn(e.pay
 const artUrl = id => (TAURI && TAURI.core.convertFileSrc && !/^(data|https?):/.test(id) ? TAURI.core.convertFileSrc(id, 'skipart') : id);
 
 // ---------- look and feel (card-local px; U scales the whole overlay) ----------
-const U = 0.82;
+let U = 0.7;              // overall scale: Settings → Size (Small / Medium / Large) and the skin
 const CARD = [125, 155], PILL = [132, 34], COVER = 109, COVER_Y = -30;
 const PD = 1200, WR = 620, WSTEP = Math.asin(222 / 620), DEG = Math.PI / 180;
 const FEEL = {
@@ -102,11 +102,29 @@ precision highp float;
 in vec2 vL; out vec4 o;
 uniform int uMode; uniform vec2 uHalf, uFb, uSOff, uLight; uniform float uRad, uA, uLod, uDim, uSBlur, uSA, uSheen, uSpec, uFrost, uDpr, uSdiv;
 uniform sampler2D uTex; uniform mat2 uAx; uniform vec4 uBand; uniform vec2 uCrop;
-float sd(vec2 p){ float r = min(uRad, min(uHalf.x, uHalf.y)); vec2 q = abs(p) - uHalf + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
+// album art: depth blur (a real Gaussian), colour tint, a frame
+uniform float uBlur, uTexSize, uTintAmt, uFrame, uPixel; uniform vec3 uTint, uFrameCol; uniform int uFrameStyle;
+// solid panels (skins, performance mode)
+uniform vec3 uTop, uBot, uEdge, uHi, uDark; uniform float uEdgeW, uBevel, uGloss, uScan, uTexMix; uniform int uHasTex, uTexMode;
+float sdr(vec2 p, vec2 h, float r){ r = min(r, min(h.x, h.y)); vec2 q = abs(p) - h + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
+float sd(vec2 p){ return sdr(p, uHalf, uRad); }
 vec2 nrm(vec2 p){ vec2 e = vec2(0.75, 0.0); return normalize(vec2(sd(p + e.xy) - sd(p - e.xy), sd(p + e.yx) - sd(p - e.yx)) + 1e-6); }
 vec3 frost(vec2 uv, float L){ vec2 t = exp2(L) * uSdiv * 0.5 / uFb;
   return 0.25 * (textureLod(uTex, uv + vec2(t.x, t.y), L).rgb + textureLod(uTex, uv + vec2(-t.x, t.y), L).rgb
                + textureLod(uTex, uv + vec2(t.x, -t.y), L).rgb + textureLod(uTex, uv - t, L).rgb); }
+// Gaussian blur of the art: 7x7 taps spread over the radius, each from the mip level that
+// matches the tap spacing, so the result is smooth (never blocky) at any amount
+vec3 gauss(vec2 uv){
+  if (uBlur < 0.002) return texture(uTex, uv).rgb;
+  float lod = log2(max(uBlur * uTexSize / 3.0, 1.0));
+  vec3 acc = vec3(0.0); float ws = 0.0;
+  for (int i = -3; i <= 3; i++) for (int j = -3; j <= 3; j++) {
+    vec2 k = vec2(float(i), float(j)) / 3.0;
+    float w = exp(-dot(k, k) * 2.2);
+    acc += textureLod(uTex, uv + k * uBlur, lod).rgb * w; ws += w;
+  }
+  return acc / ws;
+}
 void main(){
   if (uMode == 0) {   // soft shadow
     float d = sd(vL - uSOff);
@@ -118,11 +136,54 @@ void main(){
   vec2 n = nrm(vL);
   float facing = dot(n, uLight), e = -d;
   float g = dot(vL / length(uHalf), vec2(0.7071));
-  if (uMode == 1) {   // album art
-    vec3 c = texture(uTex, vL / (2.0 * uHalf) * uCrop + 0.5, uLod).rgb * (1.0 - uDim);   // uCrop: centre square of wide pictures
+  if (uMode == 1) {   // album art (uCrop: centre square of wide pictures), with an optional frame
+    vec2 inner = uHalf - vec2(uFrame);
+    vec2 auv = vL / (2.0 * inner) * uCrop + 0.5;
+    vec3 c;
+    if (uPixel > 0.0) {   // pixelated art (a skin's choice): one flat colour per cell
+      vec2 cell = (floor(auv * uPixel) + 0.5) / uPixel;
+      c = uBlur > 0.002 ? gauss(cell) : textureLod(uTex, cell, max(log2(uTexSize / uPixel), 0.0)).rgb;
+    } else c = gauss(auv);
+    float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    c = mix(c, uTint * (0.25 + 1.1 * lum), uTintAmt);
+    c *= 1.0 - uDim;
+    if (uFrame > 0.0) {
+      float di = sdr(vL, inner, max(uRad - uFrame, 1.0));
+      float t = vL.y / uHalf.y * 0.5 + 0.5;
+      vec3 f = uFrameCol;
+      if (uFrameStyle == 1) {         // chrome: bright top, dark band, a sharp highlight ring
+        f = mix(uFrameCol * 1.25, uFrameCol * 0.45, t) + 0.35 * exp(-pow((e - uFrame * 0.35) * 0.9, 2.0));
+      } else if (uFrameStyle == 2) {  // inset: lit from below, shaded from above
+        f = uFrameCol * mix(0.55, 1.35, t);
+      }
+      c = mix(c, f * (1.0 - uDim * 0.6), smoothstep(-0.6, 0.6, di));
+    }
     float rim = 1.0 - smoothstep(0.0, 1.6, e);
-    c += rim * (0.08 + 0.32 * max(facing, 0.0));
+    c += rim * (0.08 + 0.32 * max(facing, 0.0)) * (uFrame > 0.0 ? 0.4 : 1.0);
     c += exp(-pow((g - uSheen) * 3.0, 2.0)) * 0.045;
+    o = vec4(c, cov * uA); return;
+  }
+  if (uMode == 3) {   // a solid panel: gradient, picture, chunky bevel, gloss, scanlines, outline
+    float t = clamp(vL.y / uHalf.y * 0.5 + 0.5, 0.0, 1.0);
+    vec3 c = mix(uTop, uBot, t);
+    if (uHasTex == 1) {
+      vec4 tx = texture(uTex, vL / (2.0 * uHalf) + 0.5);
+      // "normal": the picture as it is; otherwise it shades the panel's colours (brushed metal)
+      c = mix(c, uTexMode == 1 ? tx.rgb : tx.rgb * mix(uTop, uBot, t) * 1.6, uTexMix * tx.a);
+    }
+    if (uBevel > 0.0) {
+      float band = 1.0 - smoothstep(uBevel * 0.8, uBevel, e);
+      c = mix(c, facing > 0.0 ? uHi : uDark, band * min(abs(facing) * 1.4, 1.0) * 0.6);
+    }
+    if (uGloss > 0.0) {
+      vec2 q = (vL - vec2(0.0, -uHalf.y * 0.52)) / vec2(uHalf.x * 0.92, uHalf.y * 0.42);
+      float gl = smoothstep(1.0, 0.25, length(q)) * step(vL.y, uHalf.y * 0.05);
+      c = mix(c, vec3(1.0), uGloss * gl * 0.55);
+    }
+    if (uScan > 0.0) c *= 1.0 - uScan * 0.45 * step(0.5, fract(gl_FragCoord.y / (2.0 * uDpr)));
+    if (uEdgeW > 0.0) c = mix(c, uEdge, 1.0 - smoothstep(uEdgeW - 0.5, uEdgeW + 0.5, e));
+    c *= 1.0 - uDim;
+    c += vec3(uSpec - 1.0) * 0.08 * max(facing, 0.0);
     o = vec4(c, cov * uA); return;
   }
   // liquid glass: lensing bevel, slight magnification, chromatic edge, adaptive frost behind text
@@ -137,7 +198,7 @@ void main(){
   float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
   c *= 1.0 - band * mix(0.14, 0.46, smoothstep(0.3, 0.85, lum));
   c *= 1.0 - 0.10 * smoothstep(0.55, 0.95, lum);           // very bright desktops: keep white text readable
-  c = mix(c, vec3(1.0), 0.06) * 1.02;
+  c = mix(c, uTint, uTintAmt) * 1.02;
   float rim = 1.0 - smoothstep(0.0, 2.2, e);
   float spec = rim * (0.2 + 0.75 * pow(max(facing, 0.0), 2.0) + 0.3 * pow(max(-facing, 0.0), 2.0));
   float bev = pow(k, 4.0) * pow(max(facing, 0.0), 2.0) * 0.22;
@@ -174,10 +235,12 @@ const tNoArt = (() => {
   return texFromSource(c);
 })();
 function texFromSource(src) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); texParams(true); gl.generateMipmap(gl.TEXTURE_2D); return t; }
-// album art by id: loaded once, kept for the most recent 160 pictures
+// album art by id: loaded once, shrunk to 256 px (covers are drawn smaller than that), kept for
+// the most recent 96 pictures. Performance mode loads none.
+const ART_SIZE = 256;
 const artCache = new Map();
 function artEntry(id) {
-  if (!id) return null;
+  if (!id || LOOK.perf) return null;
   let e = artCache.get(id);
   if (e) { artCache.delete(id); artCache.set(id, e); return e; }   // most recently used last
   e = { tex: null, crop: [1, 1], t0: 0, failed: false };
@@ -187,15 +250,17 @@ function artEntry(id) {
   im.onload = () => {
     if (!artCache.has(id)) return;
     try {
-      e.tex = texFromSource(im);
-      const a = (im.naturalWidth || 1) / (im.naturalHeight || 1);
-      e.crop = a > 1 ? [1 / a, 1] : [1, a];                              // wide video stills: the middle square
+      // the middle square (wide video stills), at the size it is drawn
+      const w = im.naturalWidth || 1, h = im.naturalHeight || 1, side = Math.min(w, h);
+      const c = document.createElement('canvas'); c.width = c.height = ART_SIZE;
+      c.getContext('2d').drawImage(im, (w - side) / 2, (h - side) / 2, side, side, 0, 0, ART_SIZE, ART_SIZE);
+      e.tex = texFromSource(c);
       e.t0 = performance.now() / 1000;
     } catch (err) { e.failed = true; }
   };
   im.onerror = () => { e.failed = true; };
   im.src = artUrl(id);
-  while (artCache.size > 160) {
+  while (artCache.size > 96) {
     const [k, old] = artCache.entries().next().value;
     if (old && old.tex) gl.deleteTexture(old.tex);
     artCache.delete(k);
@@ -203,46 +268,207 @@ function artEntry(id) {
   return e;
 }
 
+// ---------- the look: size, style, depth, performance mode, skin (all from Settings) ----------
+// A skin is a skin.json (see SKINS.md); anything it leaves out keeps these defaults.
+const SIZE_U = { small: 0.58, medium: 0.7, large: 0.82 };
+let LOOK = { style: 'wheel', layout: 'vertical', size: 'medium', depth_blur: 0.55, depth_fade: 0.45, perf: false, skin: null };
+const colorCtx = document.createElement('canvas').getContext('2d');
+function rgb(str, fb) {
+  if (typeof str !== 'string' || !str) return fb;
+  colorCtx.fillStyle = '#010203'; colorCtx.fillStyle = str;
+  const v = colorCtx.fillStyle;
+  if (v === '#010203' && !/^#?010203$/i.test(str.trim())) return fb;
+  let m = v.match(/^#([0-9a-f]{6})$/i);
+  if (m) { const n = parseInt(m[1], 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; }
+  m = v.match(/rgba?\(([^)]+)\)/);
+  if (m) { const p = m[1].split(',').map(Number); return [p[0] / 255, p[1] / 255, p[2] / 255]; }
+  return fb;
+}
+const num = (v, fb, lo, hi) => (typeof v === 'number' && isFinite(v) ? clamp(v, lo, hi) : fb);
+const pick = (o, k) => (o && typeof o === 'object' ? o[k] : undefined);
+// a panel's look from a skin section (card, button, chip)
+function panelOf(o, base) {
+  return {
+    top: rgb(pick(o, 'top'), base.top), bottom: rgb(pick(o, 'bottom'), base.bottom), edge: rgb(pick(o, 'edge'), base.edge),
+    hi: rgb(pick(o, 'highlight'), base.hi), dark: rgb(pick(o, 'dark'), base.dark),
+    edgeW: num(pick(o, 'edgeWidth'), base.edgeW, 0, 8), bevel: num(pick(o, 'bevel'), base.bevel, 0, 24),
+    gloss: num(pick(o, 'gloss'), base.gloss, 0, 1), scan: num(pick(o, 'scanlines'), base.scan, 0, 1),
+    texMix: num(pick(o, 'textureMix'), 1, 0, 1), tex: null,
+  };
+}
+const PANEL0 = { top: [0.17, 0.19, 0.24], bottom: [0.09, 0.1, 0.13], edge: [0.32, 0.35, 0.42], hi: [0.55, 0.6, 0.7], dark: [0, 0, 0], edgeW: 1, bevel: 0, gloss: 0, scan: 0 };
+function resolveSkin(raw) {
+  const d = raw && typeof raw === 'object' ? raw : {};
+  const text = d.text || {}, card = d.card || {}, cover = d.cover || {}, glass = d.glass || {}, btn = d.button || {}, chip = d.chip || {};
+  const cardP = panelOf(card, PANEL0);
+  const btnP = panelOf(btn, { ...cardP, bevel: Math.min(cardP.bevel, 4) });
+  const chipP = panelOf(chip, cardP);
+  const chipOn = panelOf({ top: chip.activeTop, bottom: chip.activeBottom }, { ...chipP, top: [0.32, 0.45, 0.85], bottom: [0.16, 0.27, 0.66] });
+  return {
+    base: d.base === 'panel' ? 'panel' : 'glass',
+    text: {
+      font: typeof text.font === 'string' ? text.font : null, family: typeof text.family === 'string' ? text.family : null,
+      color: typeof text.color === 'string' ? text.color : '#FAFBFD', soft: typeof text.soft === 'string' ? text.soft : 'rgba(250, 251, 253, .76)',
+      title: num(text.title, 21, 8, 40), artist: num(text.artist, 15, 7, 32), weight: num(text.weight, 650, 100, 900),
+      glow: typeof text.glow === 'string' ? text.glow : 'rgba(0, 0, 0, .3)', upper: !!text.upper,
+      shadow: typeof text.shadow === 'string' && text.shadow.length < 120 ? text.shadow : null,
+    },
+    card: { ...cardP, radius: num(card.radius, 30, 0, 80), scale: num(card.scale, 1, 0.6, 1.4), texFile: typeof card.texture === 'string' ? card.texture : null,
+      texNormal: card.textureMode === 'normal', texPixels: !!card.texturePixels },
+    // pictures the card in front wears (one, or a list): at its top edge, or its bottom edge
+    decos: (Array.isArray(d.decoration) ? d.decoration : d.decoration ? [d.decoration] : [])
+      .filter(o => o && typeof o.image === 'string').slice(0, 4)
+      .map(o => ({ image: o.image, width: num(o.width, 140, 10, 400), x: num(o.x, 0, -300, 300), y: num(o.y, -30, -300, 300), bottom: o.anchor === 'bottom' })),
+    cover: {
+      radius: num(cover.radius, 14, 0, 60), frame: num(cover.frame, 0, 0, 20), frameCol: rgb(cover.frameColor, [0.8, 0.8, 0.82]),
+      frameStyle: cover.frameStyle === 'chrome' ? 1 : cover.frameStyle === 'inset' ? 2 : 0, pixelate: num(cover.pixelate, 0, 0, 128),
+      tint: rgb(cover.tint, [1, 1, 1]), tintAmt: num(cover.tintAmount, 0, 0, 1),
+    },
+    button: { ...btnP, icon: typeof btn.icon === 'string' ? btn.icon : null },
+    chip: chipP, chipOn,
+    chipText: typeof chip.text === 'string' ? chip.text : null, chipOnText: typeof chip.activeText === 'string' ? chip.activeText : null,
+    glass: { frost: num(glass.frost, 1, 0, 2), tint: rgb(glass.tint, [1, 1, 1]), tintAmt: num(glass.tintAmount, 0.06, 0, 0.6) },
+    shadow: num(d.shadow, 1, 0, 2),
+  };
+}
+let SK = resolveSkin(null);
+// files of the skin (fonts, pictures): inside the app, or in the skins folder
+function skinFile(skin, name) {
+  if (!skin || typeof name !== 'string' || !/^[\w .()-]+$/.test(name)) return null;
+  if (skin.builtin) return skin.folder + name;
+  const path = skin.folder + name;
+  return (TAURI && TAURI.core.convertFileSrc ? TAURI.core.convertFileSrc(path, 'skipskin') : 'skipskin://localhost/' + path) + '?r=' + skin.rev;
+}
+let fontSeq = 0;
+function applyLook(look) {
+  if (!look || typeof look !== 'object') return;
+  LOOK = { ...LOOK, ...look };
+  const skin = look.skin || null;
+  SK = resolveSkin(skin && skin.data);
+  STYLE = STYLES[LOOK.style] || STYLES.wheel;
+  U = (SIZE_U[LOOK.size] || SIZE_U.medium) * SK.card.scale;
+  const perf = !!LOOK.perf;
+  FEEL.float = perf || reduceMotion ? 0 : 1; FEEL.trail = perf || reduceMotion ? 0 : 0.06;
+  FEEL.pillHold = perf ? 0.7 : 1.25; FEEL.absorb = perf ? 0.25 : 0.42;
+  const wasGlass = glassOn;
+  glassOn = SK.base === 'glass' && !perf;
+  if (wasGlass !== glassOn && state !== 'hidden') resize();
+  setLayout(STYLE.axis() === 'h' ? 'horizontal' : 'vertical', state === 'hidden');
+  // the words: colours and font
+  const rs = document.documentElement.style, T = SK.text;
+  rs.setProperty('--ink', T.color); rs.setProperty('--ink-soft', T.soft);
+  rs.setProperty('--title-size', T.title + 'px'); rs.setProperty('--artist-size', T.artist + 'px'); rs.setProperty('--title-weight', T.weight);
+  rs.setProperty('--glow', T.glow); rs.setProperty('--case', T.upper ? 'uppercase' : 'none');
+  if (T.shadow) rs.setProperty('--text-shadow', T.shadow); else rs.removeProperty('--text-shadow');
+  // what the front card wears (a skin's pictures, e.g. a hat)
+  decoEls.forEach((el, i) => {
+    const dd = SK.decos[i], url = dd && !perf ? skinFile(skin, dd.image) : null;
+    if (url) el.src = url; else el.removeAttribute('src');
+    el.style.visibility = 'hidden';
+  });
+  decoOn = SK.decos.length > 0 && !perf;
+  rs.setProperty('--btn-ink', SK.button.icon || T.color);
+  rs.setProperty('--chip-ink', SK.chipText || T.color); rs.setProperty('--chip-on-ink', SK.chipOnText || T.color);
+  const sys = '"Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif';
+  const family = T.family ? JSON.stringify(T.family) + ', ' + sys : sys;
+  rs.setProperty('--font', family);
+  const url = T.font && skinFile(skin, T.font);
+  if (url && window.FontFace) {
+    const name = 'SkipSkin' + (++fontSeq);
+    new FontFace(name, 'url(' + JSON.stringify(url) + ')').load().then(f => { document.fonts.add(f); if (name === 'SkipSkin' + fontSeq) rs.setProperty('--font', '"' + name + '", ' + family); }).catch(err => console.warn('[Skip Dat] skin font', err));
+  }
+  // the card's picture
+  if (SK.card.texFile && !perf) {
+    const turl = skinFile(skin, SK.card.texFile), want = SK;
+    if (turl) {
+      const im = new Image(); im.crossOrigin = 'anonymous';
+      im.onload = () => {
+        if (SK !== want) return;
+        const tx = texFromSource(im);
+        if (SK.card.texPixels) { gl.bindTexture(gl.TEXTURE_2D, tx); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); }
+        SK.card.tex = tx;
+      };
+      im.src = turl;
+    }
+  }
+  document.body.classList.toggle('perf', perf);
+  document.body.classList.toggle('compact', STYLE === STYLES.compact);
+}
+
 let W = 0, H = 0, dpr = 1, sdiv = 2, sw = 1, sh = 1;
 let tComp = null, tScene = null;
 const fbComp = gl.createFramebuffer(), fbScene = gl.createFramebuffer();
+// Liquid glass draws over a copy of the desktop, so it needs two screen-sized buffers; solid
+// skins and performance mode draw straight onto the window and need neither.
+let glassOn = true;
+function freeBuffers() {
+  if (tComp) { gl.deleteTexture(tComp); tComp = null; }
+  if (tScene) { gl.deleteTexture(tScene); tScene = null; }
+}
 function resize() {
   dpr = window.devicePixelRatio || 1; W = innerWidth; H = innerHeight;
   cv.width = Math.max(2, Math.round(W * dpr)); cv.height = Math.max(2, Math.round(H * dpr));
-  if (tComp) gl.deleteTexture(tComp);
+  freeBuffers();
+  if (!glassOn) return;
   tComp = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tComp); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, cv.width, cv.height); texParams(false);
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbComp); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tComp, 0);
   sdiv = dpr >= 1.5 ? 4 : 2;
   sw = Math.max(1, Math.round(cv.width / sdiv)); sh = Math.max(1, Math.round(cv.height / sdiv));
-  if (tScene) gl.deleteTexture(tScene);
   tScene = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tScene);
   gl.texStorage2D(gl.TEXTURE_2D, Math.floor(Math.log2(Math.max(sw, sh))) + 1, gl.RGBA8, sw, sh); texParams(true);
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbScene); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tScene, 0);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
+// While hidden the window keeps nothing big on the graphics card: the screen-sized buffers and
+// the desktop picture are let go, and made again (in a few milliseconds) on the next opening.
+function sleepGpu() {
+  freeBuffers();
+  if (tSnap !== tSnapFallback) { gl.deleteTexture(tSnap); tSnap = tSnapFallback; }
+  cv.width = cv.height = 2; W = H = 0;
+}
 
+const v3 = (u, c) => gl.uniform3f(u, c[0], c[1], c[2]);
+function panelUniforms(q, p) {
+  // performance mode keeps a skin's colours and outline, nothing more
+  const lite = LOOK.perf;
+  v3(q.uTop, p.top); v3(q.uBot, p.bottom); v3(q.uEdge, p.edge); v3(q.uHi, p.hi); v3(q.uDark, p.dark);
+  gl.uniform1f(q.uEdgeW, p.edgeW); gl.uniform1f(q.uBevel, lite ? 0 : p.bevel); gl.uniform1f(q.uGloss, lite ? 0 : p.gloss);
+  gl.uniform1f(q.uScan, lite ? 0 : p.scan); gl.uniform1f(q.uTexMix, p.texMix || 0); gl.uniform1i(q.uHasTex, p.tex && !lite ? 1 : 0); gl.uniform1i(q.uTexMode, p.texNormal ? 1 : 0);
+}
 function draw(F) {
   const fw = cv.width, fh = cv.height;
-  gl.viewport(0, 0, fw, fh); gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fbComp);
-  gl.useProgram(PBG.pr); gl.bindVertexArray(vFull);
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tSnap);
-  gl.uniform1i(PBG.u.uSnap, 0); gl.uniform2f(PBG.u.uFb, fw, fh);
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  const direct = !glassOn;
+  gl.viewport(0, 0, fw, fh); gl.disable(gl.DEPTH_TEST);
+  if (direct) {
+    // solid skins / performance mode: straight onto the window
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+  } else {
+    gl.disable(gl.BLEND);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbComp);
+    gl.useProgram(PBG.pr); gl.bindVertexArray(vFull);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tSnap);
+    gl.uniform1i(PBG.u.uSnap, 0); gl.uniform2f(PBG.u.uFb, fw, fh);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
   gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   const q = PQ.u;
   gl.useProgram(PQ.pr); gl.bindVertexArray(vQ);
+  gl.activeTexture(gl.TEXTURE0);
   gl.uniform1f(q.uPd, PD); gl.uniform2f(q.uO, OX, OY); gl.uniform2f(q.uRes, W, H); gl.uniform2f(q.uFb, fw, fh);
   gl.uniform1f(q.uDpr, dpr); gl.uniform1f(q.uSdiv, sdiv); gl.uniform1i(q.uTex, 0);
   for (const it of F.items) {
     if (it.k === 'copy') {
+      if (direct) continue;
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fbComp); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, fbScene);
       gl.blitFramebuffer(0, 0, fw, fh, 0, 0, sw, sh, gl.COLOR_BUFFER_BIT, gl.LINEAR);
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbComp);
       gl.bindTexture(gl.TEXTURE_2D, tScene); gl.generateMipmap(gl.TEXTURE_2D);
       continue;
     }
-    const mode = it.k === 'shadow' ? 0 : it.k === 'cover' ? 1 : 2;
+    // without the desktop picture, glass becomes a solid panel
+    const panel = it.k === 'panel' || (it.k === 'glass' && direct);
+    const mode = it.k === 'shadow' ? 0 : it.k === 'cover' ? 1 : panel ? 3 : 2;
     const pad = mode === 0 ? it.blur * 1.3 + 4 : 2;
     gl.uniformMatrix4fv(q.uM, false, it.M);
     gl.uniform2f(q.uSize, 2 * (it.half[0] + pad), 2 * (it.half[1] + pad));
@@ -252,16 +478,30 @@ function draw(F) {
     if (mode === 0) { gl.uniform2f(q.uSOff, it.off[0], it.off[1]); gl.uniform1f(q.uSBlur, it.blur); gl.uniform1f(q.uSA, 1); }
     else {
       gl.uniform2f(q.uLight, it.light[0], it.light[1]); gl.uniform1f(q.uSheen, it.sheen); gl.uniform1f(q.uDim, it.dim);
-      gl.bindTexture(gl.TEXTURE_2D, mode === 1 ? it.tex : tScene);
-      if (mode === 1) { gl.uniform1f(q.uLod, it.lod); gl.uniform2f(q.uCrop, it.crop ? it.crop[0] : 1, it.crop ? it.crop[1] : 1); }
-      else {
+      gl.uniform1f(q.uSpec, it.spec || 1);
+      if (mode === 1) {
+        gl.bindTexture(gl.TEXTURE_2D, it.tex);
+        gl.uniform1f(q.uLod, it.lod); gl.uniform2f(q.uCrop, it.crop ? it.crop[0] : 1, it.crop ? it.crop[1] : 1);
+        gl.uniform1f(q.uBlur, it.blurUv || 0); gl.uniform1f(q.uTexSize, it.texSize || 256);
+        const cv_ = it.coverSkin || SK.cover;
+        v3(q.uTint, cv_.tint); gl.uniform1f(q.uTintAmt, cv_.tintAmt);
+        gl.uniform1f(q.uFrame, it.frame || 0); v3(q.uFrameCol, cv_.frameCol); gl.uniform1i(q.uFrameStyle, cv_.frameStyle);
+        gl.uniform1f(q.uPixel, cv_.pixelate || 0);
+      } else if (mode === 3) {
+        const p = it.panel || SK.card;
+        gl.bindTexture(gl.TEXTURE_2D, p.tex || tNoArt);
+        panelUniforms(q, p);
+      } else {
+        gl.bindTexture(gl.TEXTURE_2D, tScene);
         gl.uniformMatrix2fv(q.uAx, false, it.ax.slice(0, 4)); gl.uniform4f(q.uBand, it.band[0], it.band[1], it.band[2], it.band[3]);
-        gl.uniform1f(q.uFrost, it.frost); gl.uniform1f(q.uSpec, it.spec);
+        gl.uniform1f(q.uFrost, it.frost);
+        v3(q.uTint, SK.glass.tint); gl.uniform1f(q.uTintAmt, SK.glass.tintAmt);
       }
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
   gl.disable(gl.BLEND);
+  if (direct) return;
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.useProgram(PPR.pr); gl.bindVertexArray(vFull);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tComp);
@@ -319,7 +559,7 @@ function buildCol(src, old) {
   const c = old || { key: src.key, tgt: 0, wheel: mk(3, 0), hist: [], p: 0, vel: 0, words: new Map(), items: [] };
   if (old && old.items.length && state !== 'hidden') {
     // the list moved (a skip, songs added before this one): stay on the same song
-    const anchor = old.byRel.get(clamp(Math.round(c.tgt), c.relMin, c.relMax));
+    const anchor = old.byRel.get(clamp(Math.round(c.tgt), c.selMin, c.selMax));
     const now = anchor && items.find(i => i.key === anchor.key);
     const shift = now ? now.rel - anchor.rel : 0;
     if (shift) { c.tgt += shift; c.wheel.x = c.wheel.x.map(x => x + shift); c.hist.forEach(h => { h[1] += shift; }); c.p += shift; }
@@ -328,8 +568,11 @@ function buildCol(src, old) {
   c.byRel = new Map(items.map(i => [i.rel, i]));
   c.relByKey = new Map(items.map(i => [i.key, i.rel]));
   c.relMin = items[0].rel; c.relMax = items[items.length - 1].rel;
+  // songs the player can't reach (no previous / next button) are shown but can't be picked
+  c.selMin = src.can_prev === false ? Math.min(0, c.relMax) : c.relMin;
+  c.selMax = src.can_next === false ? Math.max(0, c.relMin) : c.relMax;
   if (!dirty || state === 'hidden') c.tgt = 0;                       // follow the player
-  c.tgt = clamp(c.tgt, c.relMin, c.relMax);
+  c.tgt = clamp(c.tgt, c.selMin, c.selMax);
   const keys = new Set(items.map(i => i.key));
   for (const [k, w] of c.words) if (!keys.has(k)) { w.tEl.remove(); w.aEl.remove(); c.words.delete(k); }
   for (const it of items) { const w = c.words.get(it.key); if (w) setWords(w, it, src); }
@@ -368,12 +611,23 @@ const chipEls = Array.from({ length: RAIL.maxChips }, () => {
   ui.append(el);
   return { el, s: el.style, name: el.querySelector('.name'), mark: el.querySelector('.mark'), bars: [...el.querySelectorAll('.mark i')].map(i => i.style), text: null, on: null, shown: false };
 });
+// the transport buttons ("What was I playing?" is in Settings and the tray menu)
 const BTNS = ['previous', 'toggle', 'next'];
 const btnEls = BTNS.map(id => {
   const el = document.createElement('div'); el.className = 'ctl'; ui.append(el);
   return { id, el, s: el.style, icon: null, shown: false };
 });
 const noteEl = document.createElement('p'); noteEl.className = 'note'; ui.append(noteEl);
+// "Back to …" under the play/pause button: the song that was playing before the last skip
+const BACK = { h: 21 };
+const backEl = document.createElement('div'); backEl.className = 'back';
+backEl.innerHTML = '<img alt=""><span class="txt"><span class="lbl">Back to</span><span class="ttl"></span></span>';
+ui.append(backEl);
+const backImg = backEl.querySelector('img'), backTtl = backEl.querySelector('.ttl');
+let backKey = null, backShown = false;
+backImg.onerror = () => { backImg.style.visibility = 'hidden'; };
+const decoEls = Array.from({ length: 4 }, () => { const el = document.createElement('img'); el.className = 'deco'; el.alt = ''; ui.append(el); return el; });
+let decoOn = false;
 let noteText = null, noteShown = false;
 const hov = new Map(), pressAt = new Map();
 function hoverOf(id, on, h) { const v = hov.get(id) || 0; const n = v + ((on ? 1 : 0) - v) * (1 - Math.exp(-h * 18)); hov.set(id, n); return n; }
@@ -400,6 +654,91 @@ function sendHits(list, t) {
   hitsSent = key; hitsAt = t;
   invoke('set_hit_rects', { gen, rects });
 }
+
+// ---------- carousel styles ----------
+// Each style places a song's card from `d`, its distance from the middle of the list (0: the
+// song in front, 1: the next one, -1: the one before…), in card-local pixels before the
+// overall scale. To add a style, add an entry here and a tile in settings.html:
+//   axis()   'v' or 'h': the app names and buttons go beside ('v') or above/below ('h')
+//   card     card size [half width, half height]; cover: whether it shows album art
+//   span     how far from the middle songs are drawn; band: where its words sit on the glass
+//   text     where the title and artist sit on the card
+//   place(c) the card's matrix and depth, from c: { d, ad, Mcol, fx, fy, fz, push, hm, cc, nb, eo, onlyV, onlyH, colZ }
+//   words(dd) optional: how visible a card's words are (default: by axis)
+//   reachY   optional: how far it reaches up and down from the song in front (default 260)
+// the orbit: a ring with a radius of 310 (its middle is about where the cursor is) and room for 11
+// songs, tilted 45° away from you
+const ORBIT = { r: 310, step: 2 * Math.PI / 11, cos: Math.cos(45 * DEG), sin: Math.sin(45 * DEG) };
+const STYLES = {
+  // the 1.0 look: a drum turning toward you (vertical) or a wheel turning sideways (horizontal)
+  wheel: {
+    axis: () => (LOOK.layout === 'horizontal' ? 'h' : 'v'), card: CARD, cover: true, span: 3.4, band: [80, 200],
+    text: { x: -107, ty: 93, ay: 120 },
+    place(c) {
+      const thW = clamp(c.d, -3.3, 3.3) * WSTEP * (1 - 0.35 * c.cc * c.nb);
+      const Mv = c.onlyH ? null : chain(c.Mcol, Tm(c.fx, c.fy, c.fz - WR - c.push), RX(-thW), Tm(0, 0, WR));
+      const zv = WR * (Math.cos(thW) - 1) - c.push + c.fz + c.colZ;
+      if (c.onlyV) return { M: Mv, z: zv };
+      // horizontal: cards turn around a vertical axis, the ones beside sitting a little lower
+      const thH = clamp(c.d, -3.3, 3.3) * WSTEP_H * (1 - 0.35 * c.cc * c.nb);
+      const fyh = 16 * (1 - Math.cos(clamp(c.d, -3, 3) * 0.5)) * (1 - c.hm) + c.fy;
+      const Mh = chain(c.Mcol, Tm(0, fyh, c.fz - WRH - c.push), RY(thH), Tm(0, 0, WRH));
+      const zh = WRH * (Math.cos(thH) - 1) - c.push + c.fz + c.colZ;
+      return c.onlyH ? { M: Mh, z: zh } : { M: lerpM(Mv, Mh, c.eo), z: lerp(zv, zh, c.eo) };
+    },
+  },
+  // flat cards stacked down a list, each further one a little smaller and further back
+  stack: {
+    axis: () => 'v', card: CARD, cover: true, span: 3.4, band: [80, 200],
+    text: { x: -107, ty: 93, ay: 120 },
+    place(c) {
+      const a = Math.abs(c.d), sg = Math.sign(c.d);
+      const y = sg * (Math.min(a, 1) * 200 + Math.max(0, a - 1) * 150);
+      const sc = 1 - Math.min(a, 3) * 0.07, z = -a * 70;
+      return { M: chain(c.Mcol, Tm(c.fx * 0.25, y + c.fy * 0.6, c.fz - c.push + z), Sm(sc, sc, 1)), z: z - c.push + c.colZ };
+    },
+  },
+  // a row: the song in front faces you, the others turned away on both sides
+  coverflow: {
+    axis: () => 'h', card: CARD, cover: true, span: 4.4, band: [80, 200],
+    text: { x: -107, ty: 93, ay: 120 },
+    place(c) {
+      const a = Math.abs(c.d), sg = Math.sign(c.d), k = Math.min(a, 1), e = k * k * (3 - 2 * k);
+      const x = sg * (e * 184 + Math.max(0, a - 1) * 74);
+      const z = -e * 150 - Math.max(0, a - 1) * 26;
+      return { M: chain(c.Mcol, Tm(x, c.fy * 0.4, z - c.push + c.fz * 0.3), RY(-sg * e * 60 * DEG * (1 - c.hm))), z: z - c.push + c.colZ };
+    },
+  },
+  // a ring of songs orbiting round the cursor: the ring is tilted so its far side goes back (and
+  // blurs with Depth), the song in front faces you beside the cursor, the next ones curve away
+  // below it and the earlier ones above
+  orbit: {
+    axis: () => 'v', card: CARD, cover: true, span: 6.2, band: [80, 200],
+    text: { x: -107, ty: 93, ay: 120 },
+    place(c) {
+      const sd = val(sideC), th = c.d * ORBIT.step, ring = Math.cos(th) - 1;
+      const x = sd * ORBIT.r * ORBIT.cos * ring + c.fx * 0.3;
+      const y = ORBIT.r * Math.sin(th) + c.fy * 0.5;
+      const z = ORBIT.r * ORBIT.sin * ring;
+      const e = smoothstep(0, 1.2, c.ad) * (1 - c.hm), sc = 1 - 0.34 * e;
+      return { M: chain(c.Mcol, Tm(x, y, z - c.push + c.fz * 0.3), RY(-sd * 30 * DEG * e), Sm(sc, sc, 1)), z: z - c.push + c.colZ };
+    },
+    // the next song's name shows below the one in front; earlier ones are tucked behind it
+    words: dd => (dd.d >= 0 ? 1 - smoothstep(1.1, 1.8, dd.ad) : 1 - smoothstep(0.3, 0.6, dd.ad)),
+    reachY: 480,   // how far the ring reaches up and down: it opens where there is room for that
+  },
+  // text only, small: a short list of titles
+  compact: {
+    axis: () => 'v', card: [118, 25], cover: false, span: 4.6, band: [-25, 25],
+    text: { x: -104, ty: -17, ay: 3 },
+    place(c) {
+      const a = Math.abs(c.d), sc = 1 - Math.min(a, 4) * 0.05, z = -a * 12;
+      return { M: chain(c.Mcol, Tm(0, c.d * 56 + c.fy * 0.3, c.fz * 0.3 - c.push + z), Sm(sc, sc, 1)), z: z - c.push + c.colZ };
+    },
+    words: dd => 1 - smoothstep(2.2, 4.4, dd.ad),
+  },
+};
+let STYLE = STYLES.wheel;
 
 // ---------- state ----------
 let state = 'hidden', running = false, last = 0, frameErr = 0, lastPrune = 0;
@@ -428,7 +767,8 @@ function targets() {
   const reach = (205 + RAIL_X + RAIL.w / 2 + 24) * U;
   side = home[0] + reach < W ? 1 : -1;
   const pill = [clamp(home[0] + side * 158 * U, 140 * U, W - 140 * U), clamp(home[1] - 56 * U, 50 * U, H - 50 * U)];
-  const vert = [home[0] + side * 205 * U, clamp(home[1] - 190 * U, 260 * U, H - 260 * U)];
+  const ry = (STYLE.reachY || 260) * U;
+  const vert = [home[0] + side * 205 * U, clamp(home[1] - 190 * U, Math.min(ry, H / 2), Math.max(H - ry, H / 2))];
   // horizontal: centred over the cursor, above it (below it when there is no room above)
   const above = home[1] - (CARD[1] + 46 + 20 + 58) * U;
   const roomAbove = above - (CARD[1] + 44 + 40) * U > 8;
@@ -458,15 +798,18 @@ function resetHidden() {
   chipEls.forEach(c => { c.s.visibility = 'hidden'; c.shown = false; });
   btnEls.forEach(b => { b.s.visibility = 'hidden'; b.shown = false; });
   noteEl.style.visibility = 'hidden'; noteShown = false;
+  backEl.style.visibility = 'hidden'; backShown = false;
+  decoEls.forEach(el => { el.style.visibility = 'hidden'; });
   eqEl.style.opacity = 0;
   tSnap = tSnapFallback;
   hitsSent = '';
   if (pendingV) { const v = pendingV; pendingV = null; applyView(v); }
 }
-function finishHide() { resetHidden(); invoke('overlay_done', { gen }); }
+function finishHide() { resetHidden(); sleepGpu(); invoke('overlay_done', { gen }); }
 
 function curSrc() { const c = cols.length ? curCol() : null; return c && c.key !== 'none' ? c : null; }
 function control(action) {
+  if (action === 'back') { pressAt.set(action, nowS()); invoke('go_back'); toggleAt = nowS(); const c = curSrc(); if (c) { dirty = false; c.tgt = 0; } return; }
   const c = curSrc(); if (!c) return;
   invoke('media_control', { source: c.key, action });
   toggleAt = nowS(); pressAt.set(action, nowS());
@@ -481,8 +824,8 @@ function playItem(c, item) {
 // ---------- events from the app ----------
 listen('lg-show', d => {
   gen = d.gen || gen;
-  if (d.layout) setLayout(d.layout, state === 'hidden');
-  if (innerWidth !== W || innerHeight !== H || (window.devicePixelRatio || 1) !== dpr) resize();
+  if (d.layout) { LOOK.layout = d.layout; setLayout(STYLE.axis() === 'h' ? 'horizontal' : 'vertical', state === 'hidden'); }
+  if (innerWidth !== W || innerHeight !== H || (window.devicePixelRatio || 1) !== dpr || (glassOn && !tComp)) resize();
   m = [d.x / dpr, d.y / dpr];
   if (state === 'hidden') {
     lpSlow = m.slice(); home = m.slice();
@@ -501,7 +844,7 @@ function wheelStep(steps) {
   if (state === 'hidden' || !cols.length) return;
   resumeBrowse();
   const c = curCol();
-  c.tgt = clamp(Math.round(c.tgt) + steps, c.relMin - 1, c.relMax + 1);   // exactly one song per notch
+  c.tgt = clamp(Math.round(c.tgt) + steps, c.selMin - 1, c.selMax + 1);   // exactly one song per notch
   lastStep = nowS(); dirty = true;
 }
 listen('lg-wheel', wheelStep);
@@ -524,7 +867,9 @@ listen('lg-arrow', dir => {
   const across = oriT > 0.5 ? { up: -1, down: 1 } : { left: -1, right: 1 };
   if (along[dir]) wheelStep(along[dir]); else if (across[dir]) appStep(across[dir]);
 });
-listen('lg-layout', name => setLayout(name, state === 'hidden'));
+listen('lg-layout', name => { LOOK.layout = name; setLayout(STYLE.axis() === 'h' ? 'horizontal' : 'vertical', state === 'hidden'); });
+listen('lg-look', look => applyLook(look));
+invoke('get_look').then(l => { if (l) applyLook(l); });
 listen('lg-click', id => {
   if (state !== 'browse' || typeof id !== 'string') return;
   if (id.startsWith('ctl:')) control(id.slice(4));
@@ -540,7 +885,7 @@ listen('lg-commit', () => {
   ai = clamp(Math.round(ai), 0, cols.length - 1);
   selCol = ai;
   const c = cols[selCol];
-  sel = clamp(Math.round(c.tgt), c.relMin, c.relMax); c.tgt = sel;
+  sel = clamp(Math.round(c.tgt), c.selMin, c.selMax); c.tgt = sel;
   const item = c.byRel.get(sel);
   const othersPlaying = cols.some(o => o !== c && o.src.playing);
   // only an actual choice plays something; just looking (or using the buttons) closes quietly
@@ -576,9 +921,9 @@ function frame(nowMs) {
   catch (err) { if (frameErr++ < 3) console.error('[Skip Dat] frame', err); }   // keep animating; the app closes us if it must
 }
 
-function coverItems(M, half, rad, a, art, lod, dim, light, sheen, t) {
+function coverItems(M, half, rad, a, art, lod, dim, light, sheen, t, blurUv, frame) {
   const e = artEntry(art);
-  const base = { k: 'cover', M, half, rad, a, lod, dim, light, sheen };
+  const base = { k: 'cover', M, half, rad, a, lod, dim, light, sheen, blurUv: blurUv || 0, frame: frame || 0, texSize: ART_SIZE };
   if (!e || !e.tex) return [{ ...base, tex: tNoArt }];
   const fade = smoothstep(0, 0.22, t - e.t0);                         // a picture that just arrived fades in
   const out = [];
@@ -596,7 +941,7 @@ function render(nowMs) {
   const cI = clamp(Math.round(ai), 0, n - 1);
   cols.forEach((c, j) => {
     if (j !== cI && state === 'browse') c.tgt = 0;
-    if (state === 'browse' && t - lastStep > 0.16) c.tgt = clamp(c.tgt, c.relMin, c.relMax);
+    if (state === 'browse' && t - lastStep > 0.16) c.tgt = clamp(c.tgt, c.selMin, c.selMax);
   });
   // stay put while the mouse heads for the wheel; follow when it goes well away
   if (state === 'browse' && bounds && !inRect([bounds[0] - 150, bounds[1] - 150, bounds[2] + 300, bounds[3] + 300], m)) home = m.slice();
@@ -604,7 +949,7 @@ function render(nowMs) {
   let rem = dt;
   while (rem > 1e-6) {
     const h = Math.min(rem, 1 / 240); rem -= h;
-    cols.forEach(c => stepC(c.wheel, rubber(c.tgt, c.relMin, c.relMax), FEEL.wheelOmega, h, FEEL.topSpeed));
+    cols.forEach(c => stepC(c.wheel, rubber(c.tgt, c.selMin, c.selMax), FEEL.wheelOmega, h, FEEL.topSpeed));
     stepC(hx, rubber(ai, 0, n - 1), 16, h, 12);
     stepC(pres, presT, 12, h); stepC(pill, pillT, 9, h); stepC(cm, cmT, 14, h); stepC(sideC, side, 10, h); stepC(oriC, oriT, 7, h);
     stepC(anc.sx, sx, 9, h); stepC(anc.sy, sy, 9, h); stepC(anc.px, px, 9, h); stepC(anc.py, py, 9, h);
@@ -653,6 +998,8 @@ function render(nowMs) {
   const onlyV = eo < 0.001, onlyH = eo > 0.999;
 
   const drawn = [];
+  const st = STYLE, perf = !!LOOK.perf, shadowK = perf ? 0 : SK.shadow;
+  const card = st.card;
   cols.forEach((col, j) => {
     const dj = j - hxv, adj = Math.abs(dj);
     if (adj > 0.9) return;
@@ -663,55 +1010,53 @@ function render(nowMs) {
     if (colA < 0.003) return;
     const Mcol = chain(R, Tm(dj * COLW * (1 - eo), dj * COLH * eo, colZ), Sm(colS, colS, colS));
     // only the songs near the wheel's position are drawn, however long the queue is
-    const lo = Math.max(col.relMin, Math.floor(col.p - 3.4)), hi = Math.min(col.relMax, Math.ceil(col.p + 3.4));
-    if (j === cI) for (let r = Math.round(col.p) - 4; r <= Math.round(col.p) + 6; r++) { const it = col.byRel.get(r); if (it && it.art) artEntry(it.art); }
+    const span = st.span;
+    const lo = Math.max(col.relMin, Math.floor(col.p - span)), hi = Math.min(col.relMax, Math.ceil(col.p + span));
+    if (j === cI && st.cover) for (let r = Math.round(col.p) - 4; r <= Math.round(col.p) + 6; r++) { const it = col.byRel.get(r); if (it && it.art) artEntry(it.art); }
     for (let rel = lo; rel <= hi; rel++) {
       const item = col.byRel.get(rel);
       if (!item) continue;
       const d0 = rel - col.p;
-      if (Math.abs(d0) > 3.4) continue;
+      if (Math.abs(d0) > span) continue;
       const lag = FEEL.trail * Math.min(Math.abs(d0), 2) * (1 - 0.7 * fast);
       const d = rel - pAt(col, t - lag), ad = Math.abs(d);
       const nb = smoothstep(0.3, 0.6, ad), hm = chosen ? mp * (1 - nb) : 0;
-      const a = clamp01((2.6 - ad) / 0.9) * alphaP * colA * (rel === 0 ? 1 : colW) * (1 - cc * nb);
+      // depth: songs away from the middle fade (Settings → Depth: fade)
+      const fadeK = 1 - LOOK.depth_fade * 0.78 * smoothstep(0.45, span - 0.6, ad) * (1 - hm);
+      const a = clamp01((span - 0.8 - ad) / 0.9) * alphaP * colA * (rel === 0 ? 1 : colW) * (1 - cc * nb) * fadeK;
       if (a < 0.003) continue;
-      const thW = clamp(d, -3.3, 3.3) * WSTEP * (1 - 0.35 * cc * nb);
       const push = 220 * cc * nb;
       const fl = (1 - hm) * FEEL.float * (1 - 0.6 * fast);
-      const fx = -Math.sin(d * 0.9) * FEEL.fan * (1 - hm);
+      const fx = -Math.sin(d * 0.9) * FEEL.fan * (1 - hm) * (st === STYLES.wheel ? 1 : 0.4);
       const fy = 6 * Math.sin(t * 1.1 - d * 0.6 - j * 0.8) * fl, fz = 8 * Math.sin(t * 0.9 - d * 0.6 - j * 0.8) * fl;
-      let M, z;
-      const Mv = onlyH ? null : chain(Mcol, Tm(fx, fy, fz - WR - push), RX(-thW), Tm(0, 0, WR));
-      const zv = WR * (Math.cos(thW) - 1) - push + fz + colZ;
-      if (onlyV) { M = Mv; z = zv; }
-      else {
-        // horizontal: cards turn around a vertical axis, the ones beside sitting a little lower
-        const thH = clamp(d, -3.3, 3.3) * WSTEP_H * (1 - 0.35 * cc * nb);
-        const fyh = 16 * (1 - Math.cos(clamp(d, -3, 3) * 0.5)) * (1 - hm) + fy;
-        const Mh = chain(Mcol, Tm(0, fyh, fz - WRH - push), RY(thH), Tm(0, 0, WRH));
-        const zh = WRH * (Math.cos(thH) - 1) - push + fz + colZ;
-        M = onlyH ? Mh : lerpM(Mv, Mh, eo); z = lerp(zv, zh, eo);
-      }
-      const half = [lerp(CARD[0], PILL[0], hm), lerp(CARD[1], PILL[1], hm)], rad = lerp(30, 34, hm);
-      const ch = lerp(COVER, 24, hm), crad = lerp(14, 11, hm);
+      const { M, z } = st.place({ d, ad, Mcol, fx, fy, fz, push, hm, cc, nb, eo, onlyV, onlyH, colZ });
+      const half = [lerp(card[0], PILL[0], hm), lerp(card[1], PILL[1], hm)], rad = lerp(Math.min(SK.card.radius, card[1]), 34, hm);
+      const ch = lerp(COVER, 24, hm), crad = lerp(SK.cover.radius, 11, hm);
       const Mc = chain(M, Tm(lerp(0, -98, hm), lerp(COVER_Y, 0, hm), 6));
-      const dim = Math.min(ad * 0.24, 0.5) + 0.3 * (1 - colW) + (col.src.playing || rel !== 0 ? 0 : 0.08);
+      // a song the player can't go back (or on) to: shown, not reachable
+      const out = rel < col.selMin || rel > col.selMax;
+      const dim = Math.min(ad * 0.24, 0.5) + 0.3 * (1 - colW) + (col.src.playing || rel !== 0 ? 0 : 0.08) + (out ? 0.25 : 0);
       const sheen = sheen0 + (hm > 0 ? sweep * 2.6 : 0);
       const cardId = 'card:' + col.key + '|' + item.key;
       const hv = browsing && j === cI ? (hov.get(cardId) || 0) : 0;
-      drawn.push({ z, w: wordsFor(col, item), d, ad, a, hm, M, colW, rel, chosen, col, item, cardId, items: [
-        { k: 'shadow', M, half, rad, off: [0, 14], blur: 30, a: 0.2 * a },
-        { k: 'copy' },
-        { k: 'glass', M, half, rad, a, ax: aff(M, 0, 0, 1), light: Lgt, sheen, dim: dim * (1 - 0.5 * hv), spec: 1 + 0.7 * pulse * colW * (1 - nb) + 0.35 * hv,
-          band: [lerp(80, -50, hm), lerp(200, 50, hm), 8, lerp(3.8, 3.2, hm)], frost: lerp(1.4, 3.2, hm) + ad * 0.6 + fast * 0.5 + (1 - colW) * 0.6 },
-        { k: 'shadow', M: Mc, half: [ch, ch], rad: crad, off: [0, 6], blur: 10, a: 0.28 * a },
-        ...coverItems(Mc, [ch, ch], crad, a, item.art, Math.min(ad * 1.1, 2.6) + fast * 1.1 + (1 - colW) * 0.8, dim, Lgt, sheen, t),
-      ] });
+      const parts = [];
+      if (shadowK > 0) parts.push({ k: 'shadow', M, half, rad, off: [0, 14], blur: 30, a: 0.2 * a * shadowK });
+      parts.push({ k: 'copy' });
+      parts.push({ k: 'glass', M, half, rad, a, ax: aff(M, 0, 0, 1), light: Lgt, sheen, dim: dim * (1 - 0.5 * hv), spec: 1 + 0.7 * pulse * colW * (1 - nb) + 0.35 * hv,
+        band: [lerp(st.band[0], -50, hm), lerp(st.band[1], 50, hm), 8, lerp(3.8, 3.2, hm)],
+        frost: (lerp(1.4, 3.2, hm) + ad * 0.6 * (0.3 + LOOK.depth_blur) + fast * 0.5 + (1 - colW) * 0.6) * SK.glass.frost, panel: SK.card });
+      if (st.cover || hm > 0.02) {
+        if (shadowK > 0) parts.push({ k: 'shadow', M: Mc, half: [ch, ch], rad: crad, off: [0, 6], blur: 10, a: 0.28 * a * (st.cover ? 1 : hm) * shadowK });
+        // depth: a real Gaussian blur on the art away from the middle (Settings → Depth: blur)
+        const blurUv = perf ? 0 : LOOK.depth_blur * (smoothstep(0.3, 2.4, ad) * 0.075 + fast * 0.025) * (1 - hm);
+        parts.push(...coverItems(Mc, [ch, ch], crad, a * (st.cover ? 1 : hm), item.art, 0, dim, Lgt, sheen, t, blurUv, SK.cover.frame * (1 - hm)));
+      }
+      drawn.push({ z, w: wordsFor(col, item), d, ad, a, hm, M, colW, rel, chosen, col, item, cardId, items: parts });
     }
   });
   drawn.sort((a1, a2) => a1.z - a2.z);
   const items = [];
-  if (drawn.length) items.push({ k: 'shadow', M: R, half: [lerp(150, 380, eo), lerp(220, 150, eo)], rad: 80, off: [0, 0], blur: 170, a: 0.10 * alphaP * (1 - mp) });
+  if (drawn.length && shadowK > 0) items.push({ k: 'shadow', M: R, half: [lerp(150, 380, eo), lerp(220, 150, eo)], rad: 80, off: [0, 0], blur: 170, a: 0.10 * alphaP * (1 - mp) * shadowK });
   drawn.forEach(dd => items.push(...dd.items));
 
   // ---- the rail: sources and transport, beside the wheel on the side away from the cursor ----
@@ -720,15 +1065,25 @@ function render(nowMs) {
   const railA = alphaP * (1 - mp) * (1 - cc) * (srcs.length ? 1 : 0);
   const cur = cols[cI] && cols[cI].key !== 'none' ? cols[cI] : null;
   const note = cur ? noteFor(cur.src) : '';
-  const chipsH = srcs.length * RAIL.chipStep - 8, railH = chipsH + 18 + RAIL.btnR * 2 + (note ? 52 : 0);
+  const back = V.back && cur && V.back.source === cur.key ? V.back : null;
+  const backH = back ? BACK.h * 2 + 12 : 0;
+  const chipsH = srcs.length * RAIL.chipStep - 8, railH = chipsH + 18 + RAIL.btnR * 2 + backH + (note ? 52 : 0);
   const top = -railH / 2;
   const rx0 = val(sideC) * RAIL_X;
   // where each part of the rail sits, in both layouts
-  const chipAt = i => [lerp(rx0, (i - (srcs.length - 1) / 2) * HRAIL.chipStep, eo), lerp(top + RAIL.chipH + i * RAIL.chipStep, HRAIL.chipY, eo)];
+  // a skin's decoration on the front card: the row of names and the buttons make room
+  let decoTop = 0, decoBot = 0;
+  if (decoOn) decoEls.forEach((el, i) => {
+    const dc = SK.decos[i]; if (!dc || !el.naturalWidth) return;
+    const dh = el.naturalHeight * dc.width / el.naturalWidth;
+    if (dc.bottom) decoBot = Math.max(decoBot, dc.y + dh / 2); else decoTop = Math.max(decoTop, dh / 2 - dc.y);
+  });
+  const chipAt = i => [lerp(rx0, (i - (srcs.length - 1) / 2) * HRAIL.chipStep, eo), lerp(top + RAIL.chipH + i * RAIL.chipStep, HRAIL.chipY - decoTop, eo)];
   const chipHalf = lerp(RAIL.w / 2, HRAIL.chipW / 2, eo);
-  const by = lerp(top + chipsH + 18 + RAIL.btnR, HRAIL.btnY, eo);
-  const btnAt = k => [lerp(rx0 + (k - 1) * RAIL.btnStep, (k - 1) * HRAIL.btnStep, eo), by];
-  const noteAt = [lerp(rx0, 0, eo), by + RAIL.btnR + 30];
+  const by = lerp(top + chipsH + 18 + RAIL.btnR, HRAIL.btnY + decoBot, eo);
+  const btnAt = k => [lerp(rx0 + (k - (BTNS.length - 1) / 2) * 44, (k - (BTNS.length - 1) / 2) * HRAIL.btnStep, eo), by];
+  const backAt = [lerp(rx0, 0, eo), by + RAIL.btnR + 12 + BACK.h];
+  const noteAt = [lerp(rx0, 0, eo), by + RAIL.btnR + 30 + backH];
   const railItems = [];
   let railDrawn = false;
   if (railA > 0.003) {
@@ -740,9 +1095,10 @@ function render(nowMs) {
       const r = rectOf(M, chipHalf, RAIL.chipH), hv = hoverOf(id, browsing && inRect(r, m), dt);
       const on = cur && s.key === cur.key;
       if (browsing) hits.push({ id, r });
-      railItems.push({ k: 'shadow', M, half: [chipHalf, RAIL.chipH], rad: RAIL.chipH, off: [0, 5], blur: 12, a: 0.16 * railA });
-      railItems.push({ k: 'glass', M, half: [chipHalf, RAIL.chipH], rad: RAIL.chipH, a: railA, ax: aff(M, 0, 0, 1), light: Lgt, sheen: sheen0,
-        dim: (on ? 0 : 0.34) * (1 - hv), spec: (on ? 1.45 : 0.8) + 0.4 * hv, band: [-RAIL.chipH, RAIL.chipH, 4, 3.4], frost: 1.8 });
+      if (shadowK > 0) railItems.push({ k: 'shadow', M, half: [chipHalf, RAIL.chipH], rad: RAIL.chipH, off: [0, 5], blur: 12, a: 0.16 * railA * shadowK });
+      railItems.push({ k: 'glass', M, half: [chipHalf, RAIL.chipH], rad: Math.min(RAIL.chipH, SK.card.radius), a: railA, ax: aff(M, 0, 0, 1), light: Lgt, sheen: sheen0,
+        dim: (on ? 0 : 0.34) * (1 - hv) * (glassOn ? 1 : 0.4), spec: (on ? 1.45 : 0.8) + 0.4 * hv, band: [-RAIL.chipH, RAIL.chipH, 4, 3.4], frost: 1.8 * SK.glass.frost,
+        panel: on ? SK.chipOn : SK.chip });
       const ce = chipEls[i];
       if (ce.text !== s.name) { ce.text = s.name; ce.name.textContent = s.name; }
       const mode = on ? (s.playing ? 'eq' : 'dot') : (s.playing ? 'dim' : 'off');
@@ -759,18 +1115,39 @@ function render(nowMs) {
       const M = chain(R, Tm(bx, byy, 0)), hid = 'ctl:' + id;
       const r = rectOf(M, RAIL.btnR, RAIL.btnR), hv = hoverOf(hid, browsing && inRect(r, m), dt);
       const pr = pressAt.get(id) || -10, flash = smoothstep(0, 0.06, t - pr) * (1 - smoothstep(0.1, 0.45, t - pr));
-      if (browsing && cur) hits.push({ id: hid, r });
-      const big = id === 'toggle' ? 1.08 : 1;
-      railItems.push({ k: 'shadow', M, half: [RAIL.btnR * big, RAIL.btnR * big], rad: RAIL.btnR * big, off: [0, 5], blur: 12, a: 0.16 * railA });
-      railItems.push({ k: 'glass', M, half: [RAIL.btnR * big, RAIL.btnR * big], rad: RAIL.btnR * big, a: railA * (cur ? 1 : 0.5), ax: aff(M, 0, 0, 1), light: Lgt, sheen: sheen0,
-        dim: 0.08 * (1 - hv), spec: 1 + 0.45 * hv + 0.9 * flash, band: [1e4, 1e4, 1, 0], frost: 1.6 });
+      // a player without previous / next: its button is there but can't be pressed
+      const able = cur && !(id === 'previous' && cur.src.can_prev === false) && !(id === 'next' && cur.src.can_next === false);
+      if (browsing && able) hits.push({ id: hid, r });
+      const big = id === 'toggle' ? 1.08 : 1, br = RAIL.btnR * big;
+      if (shadowK > 0) railItems.push({ k: 'shadow', M, half: [br, br], rad: br, off: [0, 5], blur: 12, a: 0.16 * railA * shadowK });
+      railItems.push({ k: 'glass', M, half: [br, br], rad: Math.min(br, SK.card.radius + 6), a: railA * (able ? 1 : 0.45), ax: aff(M, 0, 0, 1), light: Lgt, sheen: sheen0,
+        dim: 0.08 * (1 - hv), spec: 1 + 0.45 * hv + 0.9 * flash, band: [1e4, 1e4, 1, 0], frost: 1.6 * SK.glass.frost, panel: SK.button });
       const b = btnEls[k];
       const icon = id === 'toggle' ? (cur && cur.src.playing ? 'pause' : 'play') : id;
       if (b.icon !== icon) { b.icon = icon; b.el.innerHTML = ICON[icon]; }
       if (!b.shown) { b.s.visibility = 'visible'; b.shown = true; }
-      b.s.opacity = railA * (cur ? lerp(0.86, 1, hv) : 0.4);
+      b.s.opacity = railA * (able ? lerp(0.86, 1, hv) : 0.35);
       b.s.transform = 'matrix(' + aff(M, -9 * big, -9 * big, big).join(',') + ')';
     });
+    if (back) {
+      const M = chain(R, Tm(backAt[0], backAt[1], 0)), hw = RAIL.w / 2;
+      const r = rectOf(M, hw, BACK.h), hv = hoverOf('ctl:back', browsing && inRect(r, m), dt);
+      const pr = pressAt.get('back') || -10, flash = smoothstep(0, 0.06, t - pr) * (1 - smoothstep(0.1, 0.45, t - pr));
+      if (browsing) hits.push({ id: 'ctl:back', r });
+      if (shadowK > 0) railItems.push({ k: 'shadow', M, half: [hw, BACK.h], rad: BACK.h, off: [0, 5], blur: 12, a: 0.16 * railA * shadowK });
+      railItems.push({ k: 'glass', M, half: [hw, BACK.h], rad: Math.min(BACK.h, SK.card.radius + 4), a: railA, ax: aff(M, 0, 0, 1), light: Lgt, sheen: sheen0,
+        dim: 0.22 * (1 - hv), spec: 0.9 + 0.45 * hv + 0.9 * flash, band: [-BACK.h, BACK.h, 4, 3.4], frost: 1.8 * SK.glass.frost, panel: SK.chip });
+      const key = back.title + '\u001f' + back.artist + '\u001f' + (back.art || '');
+      if (backKey !== key) {
+        backKey = key; backTtl.textContent = back.title;
+        backEl.title = back.title + (back.artist ? ' · ' + back.artist : '');
+        if (back.art && !LOOK.perf) { backImg.src = artUrl(back.art); backImg.style.visibility = ''; backEl.classList.remove('noart'); }
+        else { backImg.removeAttribute('src'); backEl.classList.add('noart'); }
+      }
+      if (!backShown) { backEl.style.visibility = 'visible'; backShown = true; }
+      backEl.style.opacity = railA * lerp(0.9, 1, hv);
+      backEl.style.transform = 'matrix(' + aff(M, -hw + 6, -15, 1).join(',') + ')';
+    }
     if (note) {
       // on its own frosted backing so it reads on any wallpaper
       const Mn = chain(R, Tm(noteAt[0], noteAt[1], 0));
@@ -783,6 +1160,7 @@ function render(nowMs) {
     }
   }
   if (!railDrawn || !note) { if (noteShown) { noteEl.style.visibility = 'hidden'; noteShown = false; } }
+  if (!railDrawn || !back) { if (backShown) { backEl.style.visibility = 'hidden'; backShown = false; } }
   chipEls.forEach((c, i) => { if (c.shown && (!railDrawn || i >= srcs.length)) { c.s.visibility = 'hidden'; c.shown = false; } });
   if (!railDrawn) btnEls.forEach(b => { if (b.shown) { b.s.visibility = 'hidden'; b.shown = false; } });
   items.push(...railItems);
@@ -795,22 +1173,23 @@ function render(nowMs) {
   drawn.forEach(dd => {
     const w = dd.w;
     if (browsing && dd.col === cols[cI] && dd.ad < 1.25 && dd.a > 0.35) {
-      const r = rectOf(dd.M, CARD[0], CARD[1]);
+      const r = rectOf(dd.M, card[0], card[1]);
       cardHits.push({ id: dd.cardId, r, z: dd.z });
       bx0 = Math.min(bx0, r[0]); by0 = Math.min(by0, r[1]); bx1 = Math.max(bx1, r[0] + r[2]); by1 = Math.max(by1, r[1] + r[3]);
     }
     // vertical: lower cards keep their words (upper ones are covered); horizontal: the front card's only
     const ov = (dd.d >= 0 ? clamp01((2.3 - dd.ad) / 0.6) : 1 - smoothstep(0, 0.3, dd.ad)) * (1 - 0.25 * Math.min(dd.ad, 2));
     const oh = 1 - smoothstep(0.3, 0.75, dd.ad);
-    let o = lerp(ov, oh, eo) * dd.a * (1 - 0.85 * fast * (1 - dd.hm));
+    const ow = st.words ? st.words(dd) : lerp(ov, oh, eo);
+    let o = ow * dd.a * (1 - 0.85 * fast * (1 - dd.hm));
     o *= dd.rel === 0 ? lerp(0.85, 1, dd.colW) : dd.colW;
     if (o < 0.003) return;
     shownNow.add(w);
     if (!w.shown) { w.t.visibility = w.a.visibility = 'visible'; w.shown = true; }
     w.t.opacity = w.a.opacity = o;
-    const x = lerp(-107, -62, dd.hm);
-    w.t.transform = 'matrix(' + aff(dd.M, x, lerp(93, -19, dd.hm), lerp(1, 0.86, dd.hm)).join(',') + ')';
-    w.a.transform = 'matrix(' + aff(dd.M, x, lerp(120, 2, dd.hm), lerp(1, 0.87, dd.hm)).join(',') + ')';
+    const x = lerp(st.text.x, -62, dd.hm);
+    w.t.transform = 'matrix(' + aff(dd.M, x, lerp(st.text.ty, -19, dd.hm), lerp(1, 0.86, dd.hm)).join(',') + ')';
+    w.a.transform = 'matrix(' + aff(dd.M, x, lerp(st.text.ay, 2, dd.hm), lerp(1, 0.87, dd.hm)).join(',') + ')';
   });
   cols.forEach(c => c.words.forEach(w => { if (w.shown && !shownNow.has(w)) hideWords(w); }));
   // long queues: text for songs far from the wheel is dropped and made again if you come back
@@ -821,6 +1200,18 @@ function render(nowMs) {
       if (!w.shown && (r === undefined || Math.abs(r - c.p) > 12)) { w.tEl.remove(); w.aEl.remove(); c.words.delete(k); }
     }));
   }
+  // a skin's decoration sits on the card in front
+  let front = null;
+  if (decoOn) drawn.forEach(dd => { if (dd.col === cols[cI] && (!front || dd.ad < front.ad)) front = dd; });
+  decoEls.forEach((el, i) => {
+    const dc = SK.decos[i];
+    if (!front || !dc || !el.naturalWidth) { el.style.visibility = 'hidden'; return; }
+    const dw = dc.width * card[0] / CARD[0], k = dw / el.naturalWidth, dh = el.naturalHeight * k;
+    const cy = (dc.bottom ? card[1] : -card[1]) + dc.y;
+    el.style.visibility = 'visible';
+    el.style.opacity = front.a * (1 - smoothstep(0.2, 0.6, front.ad)) * (1 - front.hm);
+    el.style.transform = 'matrix(' + aff(front.M, dc.x - dw / 2, cy - dh / 2, k).join(',') + ')';
+  });
   const hero = drawn.find(dd => dd.chosen && dd.rel === sel);
   eqEl.style.opacity = hero ? smoothstep(0.55, 0.9, mp) * hero.a : 0;
   if (hero) eqEl.style.transform = 'matrix(' + aff(hero.M, 86, -11, 1).join(',') + ')';
@@ -838,6 +1229,7 @@ function render(nowMs) {
 
 resize();
 clearScreen();
+sleepGpu();          // nothing big on the graphics card until the first opening
 // Opened in an ordinary browser (no app around it): a small hook so the page can be checked.
 if (!TAURI) {
   window.__preview = {
@@ -846,5 +1238,5 @@ if (!TAURI) {
     state: () => state,
   };
 }
-window.__skipdat = { layout: () => oriT, ori: () => val(oriC), state: () => state, dirty: () => dirty, cols: () => cols.map(c => ({ key: c.key, tgt: c.tgt, p: c.p, relMin: c.relMin, relMax: c.relMax, words: c.words.size })), ai: () => Math.round(ai), home: () => home.slice(), bounds: () => bounds };
+window.__skipdat = { look: () => ({ ...LOOK, U, style: Object.keys(STYLES).find(k => STYLES[k] === STYLE), glass: glassOn, base: SK.base, buffers: !!tComp, canvas: [cv.width, cv.height], arts: artCache.size }), layout: () => oriT, ori: () => val(oriC), state: () => state, dirty: () => dirty, cols: () => cols.map(c => ({ key: c.key, tgt: c.tgt, p: c.p, relMin: c.relMin, relMax: c.relMax, words: c.words.size })), ai: () => Math.round(ai), home: () => home.slice(), bounds: () => bounds };
 })();

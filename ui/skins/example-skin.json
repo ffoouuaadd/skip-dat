@@ -1,0 +1,11 @@
+{
+  "name": "My First Skin",
+  "author": "you",
+  "base": "panel",
+  "text": { "family": "Segoe UI", "color": "#fff7ec", "soft": "#e8c9a6", "title": 21, "artist": 15, "weight": 700, "glow": "rgba(0, 0, 0, 0.35)" },
+  "card": { "radius": 22, "top": "#ff8a4c", "bottom": "#b2306b", "edge": "#5a1238", "edgeWidth": 1, "bevel": 3, "gloss": 0.35, "highlight": "#ffe2c4", "dark": "#40102a" },
+  "cover": { "radius": 12, "frame": 3, "frameColor": "#fff2e0", "frameStyle": "solid" },
+  "button": { "top": "#ffd27a", "bottom": "#e0791f", "edge": "#7a3a06", "icon": "#3a1a00", "gloss": 0.4 },
+  "chip": { "top": "#ff9d63", "bottom": "#c4406a", "text": "#fff7ec", "activeTop": "#ffd27a", "activeBottom": "#e0791f", "activeText": "#3a1a00" },
+  "shadow": 1
+}

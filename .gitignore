@@ -5,3 +5,7 @@ installer/anim/target/
 installer/stage/
 installer/*.exe
 __pycache__/
+
+# GIF recorder scratch
+docs/recorder/frames/
+docs/recorder/node_modules/

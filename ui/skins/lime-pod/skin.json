@@ -1,0 +1,12 @@
+{
+  "name": "Lime Pod",
+  "author": "Skip Dat",
+  "about": "Glossy lime-green plastic and purple bubble buttons, straight out of 2001.",
+  "base": "panel",
+  "text": { "font": "baloo2-bold.woff2", "color": "#0e3300", "soft": "#2f6a12", "title": 22, "artist": 15, "weight": 700, "glow": "rgba(220, 255, 170, 0.6)" },
+  "card": { "radius": 38, "scale": 1, "top": "#c6ff4d", "bottom": "#46a80f", "edge": "#245d04", "edgeWidth": 2, "bevel": 6, "gloss": 0.8, "highlight": "#f6ffe0", "dark": "#1d4a02" },
+  "cover": { "radius": 12, "frame": 7, "frameColor": "#d9dde3", "frameStyle": "chrome" },
+  "button": { "top": "#d2b8ff", "bottom": "#6a2fd8", "edge": "#3a1585", "icon": "#ffffff", "gloss": 0.8 },
+  "chip": { "top": "#a8e83a", "bottom": "#4c9f14", "text": "#0e3300", "activeTop": "#d2b8ff", "activeBottom": "#6a2fd8", "activeText": "#ffffff" },
+  "shadow": 0.9
+}

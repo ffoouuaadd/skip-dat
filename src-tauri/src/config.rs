@@ -25,6 +25,49 @@ pub struct Config {
     pub access_token: Option<String>,
     #[serde(default)]
     pub expires_at: u64,
+    // ---- look (1.4) ----
+    /// carousel style: "wheel" (default), "stack", "coverflow", "orbit", "compact"
+    #[serde(default = "default_style")]
+    pub style: String,
+    /// "small", "medium" (default), "large"
+    #[serde(default = "default_size")]
+    pub size: String,
+    /// how blurry the songs away from the middle get, 0..1
+    #[serde(default = "default_blur")]
+    pub depth_blur: f64,
+    /// how much they fade, 0..1
+    #[serde(default = "default_fade")]
+    pub depth_fade: f64,
+    /// performance mode: no blur, glass, shadows, animations or album art
+    #[serde(default)]
+    pub perf: bool,
+    /// skin id: a built-in one or a folder in the skins folder
+    #[serde(default = "default_skin")]
+    pub skin: String,
+    /// sites whose direct "play this queue item" was seen to reorder the queue (shuffle):
+    /// they get muted skips instead
+    #[serde(default)]
+    pub jump_reorders: Vec<String>,
+}
+
+fn default_style() -> String {
+    "wheel".into()
+}
+
+fn default_size() -> String {
+    "medium".into()
+}
+
+fn default_blur() -> f64 {
+    0.55
+}
+
+fn default_fade() -> f64 {
+    0.45
+}
+
+fn default_skin() -> String {
+    "liquid-glass".into()
 }
 
 fn yes() -> bool {
@@ -50,6 +93,13 @@ impl Default for Config {
             refresh_token: None,
             access_token: None,
             expires_at: 0,
+            style: default_style(),
+            size: default_size(),
+            depth_blur: default_blur(),
+            depth_fade: default_fade(),
+            perf: false,
+            skin: default_skin(),
+            jump_reorders: Vec::new(),
         }
     }
 }

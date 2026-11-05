@@ -15,6 +15,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::config::save;
 use crate::AppState;
+use crate::util::Lock;
 
 pub const REDIRECT: &str = "http://127.0.0.1:8898/callback";
 const SCOPES: &str = "user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-recently-played";
@@ -24,7 +25,7 @@ fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
-fn enc(s: &str) -> String {
+pub fn enc(s: &str) -> String {
     let mut out = String::new();
     for b in s.bytes() {
         match b {
@@ -47,13 +48,13 @@ fn state(app: &AppHandle) -> tauri::State<'_, AppState> {
 }
 
 pub fn connected(app: &AppHandle) -> bool {
-    let cfg = state(app).cfg.lock().unwrap().clone();
+    let cfg = state(app).cfg.guard().clone();
     !cfg.client_id.is_empty() && cfg.refresh_token.is_some()
 }
 
 /// Opens the Spotify sign-in page and waits (up to 3 minutes) for the browser to come back.
 pub fn connect(app: &AppHandle) -> Result<(), String> {
-    let client_id = state(app).cfg.lock().unwrap().client_id.trim().to_string();
+    let client_id = state(app).cfg.guard().client_id.trim().to_string();
     if client_id.is_empty() {
         return Err("Paste your Spotify Client ID first.".into());
     }
@@ -132,7 +133,7 @@ pub fn connect(app: &AppHandle) -> Result<(), String> {
 
 pub fn disconnect(app: &AppHandle) {
     let st = state(app);
-    let mut cfg = st.cfg.lock().unwrap();
+    let mut cfg = st.cfg.guard();
     cfg.refresh_token = None;
     cfg.access_token = None;
     cfg.expires_at = 0;
@@ -141,7 +142,7 @@ pub fn disconnect(app: &AppHandle) {
 
 fn store_tokens(app: &AppHandle, v: &Value) {
     let st = state(app);
-    let mut cfg = st.cfg.lock().unwrap();
+    let mut cfg = st.cfg.guard();
     if let Some(a) = v["access_token"].as_str() {
         cfg.access_token = Some(a.to_string());
         cfg.expires_at = now_secs() + v["expires_in"].as_u64().unwrap_or(3600).saturating_sub(60);
@@ -163,7 +164,7 @@ fn short_err(e: ureq::Error) -> String {
 }
 
 fn token(app: &AppHandle) -> Option<String> {
-    let cfg = state(app).cfg.lock().unwrap().clone();
+    let cfg = state(app).cfg.guard().clone();
     if let (Some(a), true) = (&cfg.access_token, cfg.expires_at > now_secs()) {
         return Some(a.clone());
     }
@@ -201,6 +202,19 @@ pub fn send(app: &AppHandle, method: &str, path: &str, body: Option<Value>) -> R
         None => req.set("Content-Length", "0").call(),
     };
     res.map(|_| ()).map_err(short_err)
+}
+
+/// What Spotify is playing from right now (a playlist, album, Liked Songs…), as a URI.
+pub fn context(app: &AppHandle) -> Option<String> {
+    let v = get(app, "/v1/me/player").ok()?;
+    v["context"]["uri"].as_str().filter(|s| !s.is_empty()).map(String::from)
+}
+
+/// The Spotify URI of the best match for a song (for playing it again from the history).
+pub fn find_track(app: &AppHandle, title: &str, artist: &str) -> Option<String> {
+    let q = enc(&format!("{title} {artist}"));
+    let v = get(app, &format!("/v1/search?type=track&limit=1&q={q}")).ok()?;
+    v["tracks"]["items"][0]["uri"].as_str().map(String::from)
 }
 
 /// Title, artist line, art URL and URI for a track or podcast episode object.

@@ -5,6 +5,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
+use crate::util::Lock;
 
 const CAP: usize = 400;
 
@@ -19,7 +20,7 @@ struct Store {
 static STORE: Mutex<Option<Store>> = Mutex::new(None);
 
 fn with<R>(f: impl FnOnce(&mut Store) -> R) -> R {
-    let mut g = STORE.lock().unwrap();
+    let mut g = STORE.guard();
     f(g.get_or_insert_with(Store::default))
 }
 
@@ -119,14 +120,14 @@ pub fn for_url(url: &str, done: fn()) -> Option<String> {
                         }
                     });
                     if id.is_some() {
-                        DONE.lock().unwrap().iter().for_each(|f| f());
+                        DONE.guard().iter().for_each(|f| f());
                     }
                 }
             });
             tx
         });
         let _ = tx.send(url.to_string());
-        let mut d = DONE.lock().unwrap();
+        let mut d = DONE.guard();
         if !d.contains(&done) {
             d.push(done);
         }

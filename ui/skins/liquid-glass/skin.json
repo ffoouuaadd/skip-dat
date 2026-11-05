@@ -1,0 +1,11 @@
+{
+  "name": "Liquid Glass",
+  "author": "Skip Dat",
+  "base": "glass",
+  "text": { "color": "#fafbfd", "soft": "rgba(250, 251, 253, 0.76)", "title": 21, "artist": 15, "weight": 650, "glow": "rgba(0, 0, 0, 0.3)" },
+  "card": { "radius": 30, "scale": 1 },
+  "cover": { "radius": 14 },
+  "glass": { "frost": 1, "tint": "#ffffff", "tintAmount": 0.06 },
+  "button": { "icon": "#fafbfd" },
+  "shadow": 1
+}

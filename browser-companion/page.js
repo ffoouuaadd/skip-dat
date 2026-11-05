@@ -144,6 +144,8 @@
       queue: index >= 0 ? list.slice(0, MAX_QUEUE).map(e => ({ title: e.title, artist: e.artist, art: e.art })) : [],
       index: index >= 0 && index < MAX_QUEUE ? index : -1,
       canJump: index >= 0,
+      url: vd && vd.video_id ? 'https://music.youtube.com/watch?v=' + vd.video_id : null,
+      shuffle: false,
     };
   }
   function ytmJump(index, want) {
@@ -163,7 +165,9 @@
   }
 
   // ---------- YouTube ----------
-  const watchHistory = [];
+  // the videos this tab played, oldest first ({url, title}); kept across page loads
+  const watchHistory = (() => { try { return JSON.parse(sessionStorage.getItem('__skipdat_watch') || '[]'); } catch (e) { return []; } })();
+  const saveWatch = () => { try { sessionStorage.setItem('__skipdat_watch', JSON.stringify(watchHistory)); } catch (e) { /* storage off */ } };
   // A playlist, mix ("Mix - …", it grows as it plays) or queue ("Add to queue") shows in the
   // playlist panel; its data holds every entry, also rows the page hasn't drawn yet.
   function ytPanel() {
@@ -211,6 +215,10 @@
     if (!el) return false;
     return click($('a#wc-endpoint', el)) || click($('a', el)) || (el.click(), true);
   }
+  function ytShuffle() {
+    const b = $('ytd-playlist-panel-renderer#playlist ytd-toggle-button-renderer button[aria-label*="huffle" i], ytd-playlist-panel-renderer#playlist #playlist-action-menu button[aria-label*="huffle" i]');
+    return !!(b && b.getAttribute('aria-pressed') === 'true');
+  }
   function ytNextUp() {
     const b = $('.ytp-next-button');
     // (YouTube hides the button in a small player; its data still says what plays next)
@@ -233,7 +241,14 @@
       category = (pr && pr.microformat && pr.microformat.playerMicroformatRenderer && pr.microformat.playerMicroformatRenderer.category) || '';
     } catch (e) { /* the player is between videos */ }
     const url = 'https://www.youtube.com/watch?v=' + vd.video_id;
-    if (watchHistory[watchHistory.length - 1] !== url) { watchHistory.push(url); if (watchHistory.length > 20) watchHistory.shift(); }
+    const last = watchHistory[watchHistory.length - 1];
+    if (!last || last.url !== url) {
+      // coming back to one already listed (going back): the list returns to that point
+      const at = watchHistory.findIndex(w => w.url === url);
+      if (at >= 0) watchHistory.splice(at + 1); else watchHistory.push({ url, title: vd.title || '' });
+      while (watchHistory.length > 20) watchHistory.shift();
+      saveWatch();
+    }
     const { list: entries, index: sel } = ytList();
     let index = sel;
     // the playing video by its id; the highlighted row can lag a moment behind
@@ -257,6 +272,7 @@
       playing: videoPlaying(mainVideo()),
       hasMedia: !!vd.title,
       queue: list, index, canJump,
+      url, shuffle: ytShuffle(),
     };
   }
 
@@ -312,6 +328,8 @@
       playing: !!playing,
       hasMedia: !!title,
       queue: index >= 0 ? queue : [], index, canJump: index >= 0,
+      url: badgeTitle && badgeTitle.href ? badgeTitle.href.split('?')[0] : null,
+      shuffle: !!$('.shuffleControl.m-shuffling'),
     };
   }
 
@@ -345,8 +363,8 @@
     if (SITE === 'soundcloud') return click($('.playControls__prev, .skipControl__previous'));
     const p = player();
     if (SITE === 'youtube' && !ytList().list.length) {
-      // a single video has no "previous" in YouTube itself: go back to the video before it
-      if (watchHistory.length >= 2) history.back();
+      // a single video has no "previous" in YouTube itself: the video this tab played before it
+      back(1, '');
       return;
     }
     if (p && p.previousVideo) return p.previousVideo();
@@ -376,6 +394,65 @@
     // the row's own play button (its title is a link to the track's page, not "play")
     click($('.queueItemView__playButton .sc-button-play, .sc-button-play, .queueItemView__play', el)) || el.click();
   }
+  // A video this tab played `count` videos ago (by its title when given). Opened directly, so it
+  // never leaves YouTube the way the browser's Back button can.
+  function back(count, title) {
+    const want = norm(title);
+    const before = watchHistory.slice(0, -1);
+    let t = before[before.length - count];
+    if (want) t = before.slice().reverse().find(w => norm(w.title) === want) || t;
+    if (t && t.url) location.href = t.url;
+  }
+
+  // ---------- silent skipping ----------
+  // Where a list can't be jumped straight into, the tab is muted, next / previous is pressed until
+  // the picked song plays, and the sound comes back once it does: nothing in between is heard.
+  function isMuted() {
+    if (SITE === 'soundcloud') { const v = $('.volume'); return !!(v && v.classList.contains('muted')); }
+    const p = player();
+    if (p && p.isMuted) return !!p.isMuted();
+    const v = mainVideo(); return !!(v && v.muted);
+  }
+  function setMuted(on) {
+    if (SITE === 'soundcloud') { if (isMuted() !== on) click($('.volume__button, .volume button')); return; }
+    const p = player();
+    if (p && p.mute && p.unMute) { on ? p.mute() : p.unMute(); return; }
+    const v = mainVideo(); if (v) v.muted = on;
+  }
+  const nowTitle = () => { try { return norm(state().title); } catch (e) { return ''; } };
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  async function until(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (fn()) return true; await wait(50); } return fn(); }
+  let skipping = false;
+  async function skipTo(count, title) {
+    if (skipping || !count) return;
+    skipping = true;
+    const want = norm(title);
+    const wasMuted = isMuted();
+    try {
+      if (!wasMuted) setMuted(true);
+      const step = count > 0 ? next : previous;
+      // going back, the first press may only restart the song playing: one spare press when we
+      // know which song we're after (we stop as soon as it plays)
+      const limit = Math.min(Math.abs(count) + (want && count < 0 ? 1 : 0), 40);
+      for (let i = 0; i < limit && !(want && nowTitle() === want); i++) {
+        const was = nowTitle();
+        step();
+        await until(() => nowTitle() !== was, 1500);
+      }
+      await until(() => !want || nowTitle() === want, 2500);
+      // a shuffled list may not play in the order it shows: if the presses didn't get there,
+      // play the song from the list after all (still muted until it starts)
+      if (want && nowTitle() !== want && SITE !== 'youtube') { jump(-1, title); await until(() => nowTitle() === want, 2500); }
+      playPause(true);
+      await until(() => videoPlaying(mainVideo()) || SITE === 'soundcloud', 1500);
+      await wait(150);
+    } finally {
+      if (!wasMuted) setMuted(false);
+      skipping = false;
+      soon(100);
+    }
+  }
+
   function run(cmd) {
     try {
       switch (cmd && cmd.type) {
@@ -385,6 +462,15 @@
         case 'next': next(); break;
         case 'previous': previous(); break;
         case 'jump': jump(cmd.index | 0, cmd.title || ''); break;
+        case 'skipto': skipTo(cmd.count | 0, cmd.title || ''); break;
+        case 'back':
+          if (SITE === 'youtube' && !ytList().list.length) back(Math.max(1, cmd.count | 0), cmd.title || '');
+          else skipTo(-Math.max(1, cmd.count | 0), cmd.title || '');
+          break;
+        case 'open':
+          // a song from the history, on this same site
+          if (typeof cmd.url === 'string' && new URL(cmd.url, location.href).origin === location.origin) location.href = cmd.url;
+          break;
         default: return;
       }
     } catch (e) { console.warn('[Skip Dat]', e); }
@@ -398,7 +484,13 @@
     if (e.data[TAG] !== 'cmd') return;
     // commands for the same tab arrive in order; small gaps let the page catch up between skips
     let delay = 0;
-    for (const c of e.data.cmds || []) { setTimeout(() => run(c), delay); delay += c.type === 'next' || c.type === 'previous' ? 180 : 40; }
+    const cmds = e.data.cmds || [];
+    // a silent skip plays the song itself once it gets there
+    const skipped = cmds.some(c => c && (c.type === 'skipto' || c.type === 'back'));
+    for (const c of cmds) {
+      if (skipped && c.type === 'play') continue;
+      setTimeout(() => run(c), delay); delay += c.type === 'next' || c.type === 'previous' ? 180 : 40;
+    }
   });
 
   // ---------- reporting changes ----------

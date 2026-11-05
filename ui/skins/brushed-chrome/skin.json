@@ -1,0 +1,12 @@
+{
+  "name": "Brushed Chrome",
+  "author": "Skip Dat",
+  "about": "Brushed metal, chunky bevels and a pixel font, like a 2000s desktop player.",
+  "base": "panel",
+  "text": { "font": "silkscreen.woff2", "color": "#1b2028", "soft": "#46505e", "title": 15, "artist": 11, "weight": 400, "glow": "rgba(255, 255, 255, 0.55)", "upper": true },
+  "card": { "radius": 9, "scale": 1, "top": "#eef1f5", "bottom": "#8f98a4", "edge": "#3e444d", "edgeWidth": 1, "bevel": 6, "gloss": 0.2, "texture": "brushed.png", "textureMix": 0.55, "highlight": "#ffffff", "dark": "#2a2f36" },
+  "cover": { "radius": 3, "frame": 5, "frameColor": "#20252c", "frameStyle": "inset" },
+  "button": { "top": "#f7f9fb", "bottom": "#a3abb6", "edge": "#3e444d", "icon": "#1b2028", "bevel": 4 },
+  "chip": { "top": "#e3e7ec", "bottom": "#9aa3ae", "text": "#1b2028", "activeTop": "#7fb2ff", "activeBottom": "#2a5fb8", "activeText": "#ffffff" },
+  "shadow": 1
+}

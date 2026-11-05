@@ -1,0 +1,12 @@
+{
+  "name": "LCD Night",
+  "author": "Skip Dat",
+  "about": "A green-on-black LCD with scanlines and a terminal font.",
+  "base": "panel",
+  "text": { "font": "vt323.woff2", "color": "#5cff86", "soft": "#2fb558", "title": 27, "artist": 21, "weight": 400, "glow": "rgba(92, 255, 134, 0.55)" },
+  "card": { "radius": 6, "scale": 1, "top": "#0c1d10", "bottom": "#030804", "edge": "#2c5a34", "edgeWidth": 2, "bevel": 4, "gloss": 0, "scanlines": 0.45, "highlight": "#3f7a49", "dark": "#000000" },
+  "cover": { "radius": 2, "frame": 3, "frameColor": "#2c5a34", "frameStyle": "solid", "tint": "#5cff86", "tintAmount": 0.8 },
+  "button": { "top": "#14301b", "bottom": "#061008", "edge": "#2c5a34", "icon": "#5cff86", "scanlines": 0.3 },
+  "chip": { "top": "#0c1d10", "bottom": "#030804", "text": "#2fb558", "activeTop": "#1d4a27", "activeBottom": "#0a1f0f", "activeText": "#5cff86" },
+  "shadow": 0.7
+}

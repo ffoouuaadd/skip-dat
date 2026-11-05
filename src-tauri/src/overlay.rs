@@ -26,6 +26,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use crate::AppState;
+use crate::util::Lock;
 
 pub const HIDDEN: u8 = 0;
 pub const OPEN: u8 = 1;
@@ -52,7 +53,7 @@ pub struct Snapshot {
 static MONITOR: Mutex<(i32, i32, i32, i32)> = Mutex::new((0, 0, 0, 0));
 
 pub fn origin() -> (i32, i32) {
-    let m = MONITOR.lock().unwrap();
+    let m = MONITOR.guard();
     (m.0, m.1)
 }
 
@@ -95,12 +96,12 @@ pub fn set_hits(gen: u32, rects: Vec<Rect>) {
             id: r.id,
         })
         .collect();
-    *HITS.lock().unwrap() = list;
+    *HITS.guard() = list;
 }
 
 /// Which button (if any) is under this screen point. Called from the mouse hook: quick.
 pub fn hit(x: i32, y: i32) -> Option<String> {
-    let hits = HITS.lock().unwrap();
+    let hits = HITS.guard();
     // the list is front to back
     hits.iter().find(|h| x >= h.l && x < h.r && y >= h.t && y < h.b).map(|h| h.id.clone())
 }
@@ -155,37 +156,39 @@ pub fn summon(app: &AppHandle, x: i32, y: i32) {
         mi.rcMonitor
     };
     let (w, hgt) = (r.right - r.left, r.bottom - r.top);
-    *MONITOR.lock().unwrap() = (r.left, r.top, w, hgt);
+    *MONITOR.guard() = (r.left, r.top, w, hgt);
     let gen = GEN.fetch_add(1, Relaxed) + 1;
-    HITS.lock().unwrap().clear();
+    HITS.guard().clear();
     set_phase(OPEN);
 
-    // photograph the desktop behind the overlay (our own window is excluded from capture)
+    // photograph the desktop behind the overlay (our own window is excluded from capture);
+    // performance mode and solid skins don't show it, so they skip this
+    let wants_desktop = app.try_state::<AppState>().map(|st| crate::needs_desktop(&st)).unwrap_or(true);
     let app2 = app.clone();
-    std::thread::spawn(move || {
+    if wants_desktop { std::thread::spawn(move || {
         if let Some(snap) = capture(r) {
             // a capture from an earlier opening that finished late must not replace this one
             if gen != GEN.load(Relaxed) {
                 return;
             }
             if let Some(state) = app2.try_state::<AppState>() {
-                *state.snapshot.lock().unwrap() = Some(snap);
+                *state.snapshot.guard() = Some(snap);
             }
             let _ = app2.emit_to("overlay", "lg-snapshot", ());
         }
-    });
+    }); }
 
     unsafe {
         let _ = SetWindowPos(h, Some(HWND_TOPMOST), r.left, r.top, w, hgt, SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_ASYNCWINDOWPOS);
     }
-    let layout = app.try_state::<AppState>().map(|s| s.cfg.lock().unwrap().layout.clone()).unwrap_or_default();
+    let layout = app.try_state::<AppState>().map(|s| s.cfg.guard().layout.clone()).unwrap_or_default();
     let _ = app.emit_to("overlay", "lg-show", ShowPayload { x: x - r.left, y: y - r.top, w, h: hgt, gen, layout });
     crate::view::on_summon(app);
 }
 
 fn hide() {
     set_phase(HIDDEN);
-    HITS.lock().unwrap().clear();
+    HITS.guard().clear();
     if let Some(h) = hwnd() {
         unsafe {
             let _ = ShowWindowAsync(h, SW_HIDE);

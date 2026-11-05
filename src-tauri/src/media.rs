@@ -29,6 +29,7 @@ use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
 use windows_future::{AsyncOperationCompletedHandler, AsyncStatus, IAsyncOperation};
 
 use crate::art;
+use crate::util::Lock;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Track {
@@ -50,6 +51,9 @@ pub struct AppMedia {
     /// songs played before this one, oldest first
     pub history: Vec<Track>,
     pub duration: f64,
+    /// the player accepts "previous" / "next" (some apps and stations don't)
+    pub can_prev: bool,
+    pub can_next: bool,
 }
 
 enum Sig {
@@ -71,6 +75,9 @@ static CURRENT: Mutex<Option<String>> = Mutex::new(None);
 /// the live session objects, by key, for actions
 static SESSIONS: Mutex<Option<HashMap<String, Session>>> = Mutex::new(None);
 static TX: OnceLock<Sender<Sig>> = OnceLock::new();
+/// Sessions Skip Dat is skipping through (by key), with the song it started from: the songs only
+/// passed on the way weren't listened to, so they don't go in the history.
+static PASSING: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 const HISTORY: usize = 8;
 const RECHECKS: [u64; 3] = [350, 1100, 2600];
 const READ_MS: u64 = 1500;
@@ -117,6 +124,24 @@ fn ident(s: &Session) -> usize {
 
 fn is_playing(s: &Session) -> bool {
     s.GetPlaybackInfo().and_then(|i| i.PlaybackStatus()).map(|st| st == Status::Playing).unwrap_or(false)
+}
+
+/// Whether the player has a working "previous" and "next" right now (unknown counts as yes).
+fn controls(s: &Session) -> (bool, bool) {
+    match s.GetPlaybackInfo().and_then(|i| i.Controls()) {
+        Ok(c) => (c.IsPreviousEnabled().unwrap_or(true), c.IsNextEnabled().unwrap_or(true)),
+        Err(_) => (true, true),
+    }
+}
+
+/// The app id Windows gives this session (for its per-app volume).
+pub fn app_of(id: &str) -> Option<String> {
+    APPS.guard().iter().find(|a| a.id == id).map(|a| a.app.clone())
+}
+
+/// The title playing now in this session.
+pub fn title_of(id: &str) -> Option<String> {
+    APPS.guard().iter().find(|a| a.id == id).map(|a| a.now.title.clone())
 }
 
 pub fn is_spotify(app: &str) -> bool {
@@ -174,7 +199,7 @@ pub fn position_secs(s: &Session) -> f64 {
 }
 
 pub fn snapshot() -> (Vec<AppMedia>, Option<String>) {
-    (APPS.lock().unwrap().clone(), CURRENT.lock().unwrap().clone())
+    (APPS.guard().clone(), CURRENT.guard().clone())
 }
 
 /// Ask the watcher to look again now (after we pressed something).
@@ -186,8 +211,23 @@ pub fn poke() {
 
 /// Run `f` on the session with this key (the very object the watcher reads).
 pub fn with_session<R>(id: &str, f: impl FnOnce(&Session) -> R) -> Option<R> {
-    let s = SESSIONS.lock().unwrap().as_ref().and_then(|m| m.get(id).cloned())?;
+    let s = SESSIONS.guard().as_ref().and_then(|m| m.get(id).cloned())?;
     Some(f(&s))
+}
+
+/// While Skip Dat skips through songs in this session (`from`: the song it started on), only that
+/// song goes in the history, not the ones passed on the way. `None` ends it.
+pub fn passing(id: &str, from: Option<String>) {
+    let mut g = PASSING.guard();
+    let m = g.get_or_insert_with(HashMap::new);
+    match from {
+        Some(t) => {
+            m.insert(id.to_string(), t);
+        }
+        None => {
+            m.remove(id);
+        }
+    }
 }
 
 /// Skip forward (n > 0) or back (n < 0) one song at a time.
@@ -402,9 +442,9 @@ fn resync(mgr: &Manager, subs: &mut HashMap<String, Sub>, tx: &Sender<Sig>, rech
         }
         rechecks.retain(|r| r.1 != k);
     }
-    *SESSIONS.lock().unwrap() = Some(subs.iter().map(|(k, v)| (k.clone(), v.session.clone())).collect());
+    *SESSIONS.guard() = Some(subs.iter().map(|(k, v)| (k.clone(), v.session.clone())).collect());
     {
-        let mut apps = APPS.lock().unwrap();
+        let mut apps = APPS.guard();
         let before = apps.len();
         apps.retain(|a| seen.contains(&a.id));
         changed |= apps.len() != before;
@@ -418,7 +458,7 @@ fn resync(mgr: &Manager, subs: &mut HashMap<String, Sub>, tx: &Sender<Sig>, rech
         let id = ident(&s);
         subs.iter().find(|(_, v)| v.ident == id).map(|(k, _)| k.clone()).or_else(|| Some(app_id(&s)))
     });
-    let mut c = CURRENT.lock().unwrap();
+    let mut c = CURRENT.guard();
     if *c != cur {
         *c = cur;
         changed = true;
@@ -430,12 +470,13 @@ fn resync(mgr: &Manager, subs: &mut HashMap<String, Sub>, tx: &Sender<Sig>, rech
 fn refresh(id: &str, sub: &Sub, rechecks: &mut Vec<(Instant, String, usize)>, with_props: bool) -> bool {
     let s = &sub.session;
     let playing = is_playing(s);
+    let (can_prev, can_next) = controls(s);
     let p = if with_props { props(s) } else { None };
-    let mut apps = APPS.lock().unwrap();
+    let mut apps = APPS.guard();
     let i = match apps.iter().position(|a| a.id == id) {
         Some(i) => i,
         None => {
-            apps.push(AppMedia { id: id.to_string(), app: sub.app.clone(), playing, now: Track::default(), history: Vec::new(), duration: 0.0 });
+            apps.push(AppMedia { id: id.to_string(), app: sub.app.clone(), playing, now: Track::default(), history: Vec::new(), duration: 0.0, can_prev, can_next });
             apps.len() - 1
         }
     };
@@ -444,11 +485,22 @@ fn refresh(id: &str, sub: &Sub, rechecks: &mut Vec<(Instant, String, usize)>, wi
         apps[i].playing = playing;
         changed = true;
     }
+    if (apps[i].can_prev, apps[i].can_next) != (can_prev, can_next) {
+        apps[i].can_prev = can_prev;
+        apps[i].can_next = can_next;
+        changed = true;
+    }
     let Some(p) = p else { return changed };
     let (title, artist, album) = text_of(&p);
     let e = &mut apps[i];
     if e.now.title != title || e.now.artist != artist {
-        let current = if e.now.title.is_empty() { None } else { Some(e.now.clone()) };
+        let mut current = if e.now.title.is_empty() { None } else { Some(e.now.clone()) };
+        // a song only passed while Skip Dat skipped through: not something that was played
+        if let Some(from) = PASSING.guard().as_ref().and_then(|m| m.get(id)) {
+            if current.as_ref().map(|c| &c.title != from).unwrap_or(false) {
+                current = None;
+            }
+        }
         let (t2, a2) = (title.clone(), artist.clone());
         let (ct, ca) = (e.now.title.clone(), e.now.artist.clone());
         advance_history(&mut e.history, current, |t| t.title == t2 && t.artist == a2, |t| t.title == ct && t.artist == ca);
@@ -457,7 +509,7 @@ fn refresh(id: &str, sub: &Sub, rechecks: &mut Vec<(Instant, String, usize)>, wi
         drop(apps);
         let art = read_art(&p);
         let duration = duration_of(s);
-        let mut apps = APPS.lock().unwrap();
+        let mut apps = APPS.guard();
         if let Some(e) = apps.iter_mut().find(|a| a.id == id) {
             if e.now.title == title && e.now.artist == artist {
                 e.now.art = art;
@@ -476,7 +528,7 @@ fn refresh(id: &str, sub: &Sub, rechecks: &mut Vec<(Instant, String, usize)>, wi
     // same song: the picture may have changed (it often arrives after the title)
     let art = read_art(&p);
     if art.is_some() {
-        let mut apps = APPS.lock().unwrap();
+        let mut apps = APPS.guard();
         if let Some(e) = apps.iter_mut().find(|a| a.id == id) {
             if e.now.title == title && e.now.artist == artist && e.now.art != art {
                 e.now.art = art;
@@ -491,7 +543,7 @@ fn recheck_art(id: &str, s: &Session) -> bool {
     let Some(p) = props(s) else { return false };
     let (title, artist, _) = text_of(&p);
     let art = read_art(&p);
-    let mut apps = APPS.lock().unwrap();
+    let mut apps = APPS.guard();
     if let Some(e) = apps.iter_mut().find(|a| a.id == id) {
         if e.now.title == title && e.now.artist == artist && art.is_some() && e.now.art != art {
             e.now.art = art;
