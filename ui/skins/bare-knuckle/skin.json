@@ -1,0 +1,22 @@
+{
+  "name": "Bare Knuckle",
+  "author": "Skip Dat",
+  "about": "A basement under a buzzing tube light: green-grey concrete cards, bloodied hand-wrap tape, a typed note of house rules, a rose soap bar, a bare bulb swinging by the buttons, and a reel-change cue on every new song.",
+  "base": "panel",
+  "text": { "family": "Bahnschrift Condensed", "color": "#eeedde", "soft": "#c7c59b", "title": 23, "artist": 16, "weight": 700, "upper": true,
+            "shadow": "1px 1.5px 0 rgba(0, 0, 0, 0.9), -1.2px 0 0 rgba(242, 125, 178, 0.45)" },
+  "card": { "radius": 18, "scale": 1, "top": "#2b2e25", "bottom": "#1a1d1a", "edge": "#0a0c0a", "edgeWidth": 1.5, "bevel": 3, "gloss": 0,
+            "highlight": "#6f7466", "dark": "#000000", "texture": "concrete.jpg", "textureMode": "normal", "textureMix": 1 },
+  "cover": { "radius": 9, "frame": 4, "frameColor": "#121511", "frameStyle": "inset", "tint": "#d7e0b0", "tintAmount": 0.16 },
+  "button": { "top": "#2f322c", "bottom": "#141613", "edge": "#050605", "edgeWidth": 1.5, "icon": "#eeedde", "bevel": 3, "gloss": 0, "highlight": "#585d52", "dark": "#000000" },
+  "chip": { "top": "#ddd8c4", "bottom": "#bdb69f", "text": "#1c1a12", "activeTop": "#f59ac2", "activeBottom": "#e46ea6", "activeText": "#2A0F1E",
+            "edge": "#3d3a2c", "edgeWidth": 1, "bevel": 2, "highlight": "#f1eddc", "dark": "#6e6852" },
+  "shadow": 1.1,
+  "decoration": [
+    { "image": "bulb.png", "anchor": "rail", "width": 66, "x": 106, "y": -50, "animation": "sway", "speed": 0.45, "pivot": [0.5, 0] },
+    { "image": "glow.png", "anchor": "rail", "width": 180, "x": 106, "y": -4, "behind": true, "animation": "pulse", "speed": 0.48 },
+    { "image": "props.png", "anchor": "top", "width": 300, "x": 0, "y": 155 },
+    { "image": "film.png", "anchor": "top", "width": 250, "x": 0, "y": 155, "restart": "song" }
+  ],
+  "particles": { "image": "dust.png", "count": 6, "size": 7, "motion": "drift", "speed": 0.3, "spread": 240, "opacity": 0.35 }
+}

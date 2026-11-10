@@ -78,6 +78,24 @@ pub struct Source {
     /// the page's shuffle is on
     #[serde(skip)]
     pub shuffle: bool,
+    /// the song playing is in your likes (None: can't tell here)
+    pub liked: Option<bool>,
+    /// the song buttons that work for this source: "like", "link", "next", "spotify" (acts_for)
+    pub acts: Vec<&'static str>,
+}
+
+/// Which song buttons work for a source: Spotify itself (with its connection) can like, share
+/// and queue; a YouTube, YouTube Music or SoundCloud tab can like and share; anything else can
+/// only move to Spotify, and only with the connection.
+pub fn acts_for(is_spotify: bool, is_tab: bool, connected: bool) -> Vec<&'static str> {
+    match (is_spotify, is_tab, connected) {
+        (true, _, true) => vec!["like", "link", "next"],
+        (true, _, false) => vec![],
+        (false, true, true) => vec!["like", "link", "spotify"],
+        (false, true, false) => vec!["like", "link"],
+        (false, false, true) => vec!["spotify"],
+        (false, false, false) => vec![],
+    }
 }
 
 /// A media source that is not shown because it is not music (Settings can show it anyway).
@@ -138,6 +156,28 @@ fn spot_seen(title: &str, artist: &str) -> (Option<String>, Option<String>) {
     }
 }
 
+/// Whether the Spotify song with this URI is in your Liked Songs, asked once per song.
+static SPOT_LIKED: Mutex<Option<(String, Option<bool>)>> = Mutex::new(None);
+
+fn spotify_liked(uri: &str) -> Option<bool> {
+    SPOT_LIKED.guard().as_ref().filter(|(u, _)| u == uri).and_then(|(_, l)| *l)
+}
+
+/// After liking it from the wheel (extras.rs), without asking Spotify again.
+pub fn set_spotify_liked(uri: &str, liked: bool) {
+    *SPOT_LIKED.guard() = Some((uri.to_string(), Some(liked)));
+    changed();
+}
+
+fn check_spotify_liked(app: &AppHandle, uri: &str) {
+    if SPOT_LIKED.guard().as_ref().is_some_and(|(u, _)| u == uri) {
+        return;
+    }
+    // None when Spotify won't say (the connection was made before liking was allowed)
+    let liked = spotify::library_contains(app, uri).ok();
+    *SPOT_LIKED.guard() = Some((uri.to_string(), liked));
+}
+
 /// Reads the Spotify queue when a Spotify developer app is connected (never more than every 2 s).
 pub fn refresh_spotify(app: &AppHandle, force: bool) {
     if !spotify::connected(app) {
@@ -183,6 +223,9 @@ pub fn refresh_spotify(app: &AppHandle, force: bool) {
         }
     }
     items.reverse();
+    if let Some(u) = &uri {
+        check_spotify_liked(app, u);
+    }
     items.push(SpotItem { rel: 0, title: now_title.clone(), artist, art_url, uri, ctx: ctx.clone() });
     if let Some(arr) = q["queue"].as_array() {
         for (k, it) in arr.iter().enumerate() {
@@ -270,6 +313,12 @@ fn smtc_source(app: &AppHandle, a: &media::AppMedia, name: &str, via: &str) -> S
         items = history_items(&hist, &mut seen);
         items.push(Item { key: item_key(&a.now.title, &a.now.artist, &mut seen), rel: 0, title: a.now.title.clone(), artist: a.now.artist.clone(), art: a.now.art.clone(), jump: None, uri: None, url: None, ctx: None });
     }
+    // Spotify, connected: whether the song playing is in your Liked Songs (refresh_spotify asks)
+    let liked = if media::is_spotify(&a.app) {
+        items.iter().find(|i| i.rel == 0).and_then(|i| i.uri.as_deref()).and_then(spotify_liked)
+    } else {
+        None
+    };
     Source {
         key: format!("app:{}", a.id),
         name: name.to_string(),
@@ -283,6 +332,8 @@ fn smtc_source(app: &AppHandle, a: &media::AppMedia, name: &str, via: &str) -> S
         target: Target::Smtc(a.id.clone()),
         site: String::new(),
         shuffle: false,
+        liked,
+        acts: Vec::new(),
     }
 }
 
@@ -381,6 +432,8 @@ fn tab_source(t: &browser::Tab, apps: &[media::AppMedia]) -> Source {
         target: Target::Tab(t.key.clone()),
         site: r.site.clone(),
         shuffle: r.shuffle,
+        liked: r.liked,
+        acts: Vec::new(),
     }
 }
 
@@ -456,6 +509,11 @@ pub fn build(app: &AppHandle) -> View {
     }
     hidden.sort_by(|a, b| a.name.cmp(&b.name));
     hidden.dedup_by(|a, b| a.id == b.id);
+    let connected = spotify::connected(app);
+    for s in sources.iter_mut() {
+        let spot = matches!(&s.target, Target::Smtc(id) if media::is_spotify(id));
+        s.acts = acts_for(spot, matches!(s.target, Target::Tab(_)), connected);
+    }
 
     let active = pick_active(&sources, current.as_deref());
     let back = crate::actions::back_view(&sources);
@@ -600,5 +658,20 @@ pub fn on_summon(app: &AppHandle) {
     if spotify::connected(app) {
         let app2 = app.clone();
         std::thread::spawn(move || refresh_spotify(&app2, false));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn song_buttons_per_source() {
+        assert_eq!(acts_for(true, false, true), vec!["like", "link", "next"], "Spotify, connected");
+        assert!(acts_for(true, false, false).is_empty(), "Spotify without the connection: none");
+        assert_eq!(acts_for(false, true, true), vec!["like", "link", "spotify"], "a tab, connected");
+        assert_eq!(acts_for(false, true, false), vec!["like", "link"], "a tab without the connection");
+        assert_eq!(acts_for(false, false, true), vec!["spotify"], "another app, connected");
+        assert!(acts_for(false, false, false).is_empty());
     }
 }

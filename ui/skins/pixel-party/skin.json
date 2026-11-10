@@ -1,17 +1,85 @@
 {
   "name": "Pixel Party",
   "author": "Skip Dat",
-  "about": "8-bit cave: grass and a stone pickaxe on top, a stone wall with gems in it and a flickering torch.",
+  "about": "8-bit cave: grass and a stone pickaxe on top, a stone wall with gems in it, and a wall torch that flickers, glows and throws up embers.",
   "base": "panel",
-  "text": { "font": "pixelify-bold.woff2", "color": "#ffffff", "soft": "#fbd000", "title": 20, "artist": 14, "weight": 700, "shadow": "2px 2px 0 #000000" },
-  "card": { "radius": 4, "scale": 1, "top": "#3a3a42", "bottom": "#26262c", "edge": "#000000", "edgeWidth": 4, "bevel": 6, "gloss": 0, "highlight": "#8a8a94", "dark": "#000000",
-            "texture": "cave.png", "textureMode": "normal", "textureMix": 1, "texturePixels": true },
-  "cover": { "radius": 0, "frame": 5, "frameColor": "#000000", "frameStyle": "solid" },
-  "button": { "top": "#e52521", "bottom": "#a3120f", "edge": "#000000", "edgeWidth": 3, "icon": "#ffffff", "bevel": 3, "highlight": "#ff8a7a", "dark": "#000000" },
-  "chip": { "top": "#43b047", "bottom": "#2a7a2d", "text": "#ffffff", "activeTop": "#fbd000", "activeBottom": "#d9a800", "activeText": "#000000", "edgeWidth": 3, "edge": "#000000" },
+  "text": {
+    "font": "pixelify-bold.woff2",
+    "color": "#ffffff",
+    "soft": "#fbd000",
+    "title": 20,
+    "artist": 14,
+    "weight": 700,
+    "shadow": "2px 2px 0 rgba(0, 0, 0, 0.6)"
+  },
+  "card": {
+    "radius": 4,
+    "scale": 1,
+    "top": "#3a3a42",
+    "bottom": "#26262c",
+    "edge": "#000000",
+    "edgeWidth": 4,
+    "bevel": 6,
+    "gloss": 0,
+    "highlight": "#8a8a94",
+    "dark": "#000000",
+    "texture": "cave.png",
+    "textureMode": "normal",
+    "textureMix": 1
+  },
+  "cover": {
+    "radius": 0,
+    "frame": 5,
+    "frameColor": "#000000",
+    "frameStyle": "solid"
+  },
+  "button": {
+    "top": "#d9231f",
+    "bottom": "#a3120f",
+    "edge": "#000000",
+    "edgeWidth": 3,
+    "icon": "#ffffff",
+    "bevel": 3,
+    "highlight": "#ff8a7a",
+    "dark": "#000000"
+  },
+  "chip": {
+    "top": "#2a8030",
+    "bottom": "#1d5e21",
+    "text": "#ffffff",
+    "highlight": "#fff6c8",
+    "activeTop": "#fbd000",
+    "activeBottom": "#d9a800",
+    "activeText": "#000000",
+    "edgeWidth": 3,
+    "edge": "#000000"
+  },
   "decoration": [
-    { "image": "grass.png", "width": 270, "x": 0, "y": -29 },
-    { "image": "torch.png", "width": 50, "x": 118, "y": -46, "anchor": "bottom" }
+    {
+      "image": "grass.png",
+      "width": 276,
+      "x": 0,
+      "y": -30,
+      "pixels": true
+    },
+    {
+      "image": "glow.png",
+      "anchor": "bottom",
+      "width": 128,
+      "x": 148,
+      "y": -118,
+      "opacity": 0.9,
+      "animation": "flicker",
+      "speed": 0.3
+    },
+    {
+      "image": "torch.png",
+      "anchor": "bottom",
+      "width": 60,
+      "x": 141,
+      "y": -112,
+      "pixels": true
+    }
   ],
   "shadow": 0.8
 }

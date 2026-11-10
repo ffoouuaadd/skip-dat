@@ -71,6 +71,12 @@ pub struct Report {
     /// the page's shuffle is on
     #[serde(default)]
     pub shuffle: bool,
+    /// the tab's own player volume, 0–100 (None: the page can't say, e.g. SoundCloud)
+    #[serde(default)]
+    pub volume: Option<f64>,
+    /// the song playing is liked on the site (its like button is pressed); None: no button
+    #[serde(default)]
+    pub liked: Option<bool>,
 }
 
 #[derive(Clone, Debug)]

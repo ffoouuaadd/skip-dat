@@ -4,40 +4,62 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Skip Dat</title>
-<script>/* the app sets this flag on Windows 11, where the window gets Mica */ if (window.__SKIPDAT_MICA) document.documentElement.classList.add('mica');</script>
+<script>/* the app's flags: FLOAT, the window itself is invisible and only the panels show; MICA, Windows draws
+   frosted glass behind the page (no longer set by the app, kept for older builds) */
+if (window.__SKIPDAT_FLOAT) document.documentElement.classList.add('float');
+else if (window.__SKIPDAT_MICA) document.documentElement.classList.add('mica');</script>
 <style>
-  /* Liquid glass, like the wheel: tinted glass panels with light on their edges, over the window's own
-     frosted backdrop (Mica on Windows 11) or a calm ambient field. No live blur filters: the only thing
-     that moves with the mouse is composited (transform) or a small gradient on the panel under it. */
+  /* Liquid glass, like the wheel: tinted glass panels with light caught on their edges, over the window's
+     own frosted backdrop (Acrylic on Windows 11) or a calm ambient field. Live blur only where glass lies
+     over the page itself (the skin panel). The only thing that moves with the mouse is composited
+     (transform) or a small gradient on the panel under it. */
+  @property --lit { syntax: '<number>'; inherits: false; initial-value: 0; }
   :root {
     --ink: #F5F7FB;
-    --ink-soft: rgba(229, 235, 245, .66);
-    --ink-faint: rgba(229, 235, 245, .42);
+    --ink-soft: rgba(232, 237, 246, .84);
+    --ink-faint: rgba(232, 237, 246, .80);
     --accent: #F6A9CB;
     --accent-strong: #F27DB2;
     --accent-ink: #2A0F1E;
     --good: #8EE6C2;
     --warn: #F2B880;
-    --glass: rgba(255, 255, 255, .065);
-    --glass-2: rgba(255, 255, 255, .10);
-    --rim: rgba(255, 255, 255, .14);
-    --rim-hi: rgba(255, 255, 255, .34);
+    --glass: rgba(255, 255, 255, .03);
+    --glass-2: rgba(255, 255, 255, .085);
+    --rim: rgba(255, 255, 255, .12);
+    --rim-hi: rgba(255, 255, 255, .30);
     --shade: rgba(4, 7, 14, .42);
+    /* light caught by a glass edge: bright where it comes in (top left), a softer glint where it leaves */
+    --edge: linear-gradient(155deg, rgba(255, 255, 255, .46), rgba(255, 255, 255, .10) 30%, rgba(255, 255, 255, .03) 58%, rgba(255, 255, 255, .20));
+    --edge-hi: linear-gradient(155deg, rgba(255, 255, 255, .72), rgba(255, 255, 255, .18) 30%, rgba(255, 255, 255, .06) 58%, rgba(255, 255, 255, .34));
+    --edge-on: linear-gradient(155deg, rgba(255, 255, 255, .92), rgba(255, 255, 255, .30) 34%, rgba(255, 255, 255, .08) 62%, rgba(255, 255, 255, .45));
+    --edge-pink: linear-gradient(155deg, #FFE3F0, rgba(246, 169, 203, .72) 32%, rgba(242, 125, 178, .38) 62%, rgba(255, 210, 230, .85));
+    --depth: 0 1px 2px rgba(0, 0, 0, .16), 0 8px 18px -6px rgba(0, 0, 0, .32), 0 22px 44px -18px rgba(0, 0, 0, .42);
+    /* glass fill behind text (panels, header, footer) */
+    --pane: rgba(14, 18, 28, .28);
+    /* the page's light tint over the Acrylic backdrop: the desktop stays plainly visible between the panels */
+    --tint: rgba(10, 13, 21, .40);
     --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     --display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  html { background: #0B1018; }
-  html.mica { background: transparent; }
+  html { background: #0B1018; scrollbar-gutter: stable; }
+  /* Windows 11: a light page tint, so the desktop shows through, and darker panels that keep every text at
+     4.5:1 or more even over a white window */
+  html.mica { --pane: rgba(11, 14, 22, .72); background: linear-gradient(180deg, var(--tint), rgba(10, 13, 21, .48)); }
+  /* the skin panel is open: the page under it stays put (the gutter above keeps it from shifting) */
+  html.lock { overflow: hidden; }
+  /* thin glass scrollbars, so the gutter shows the tinted glass rather than a dark track */
+  ::-webkit-scrollbar { width: 12px; height: 12px; background: transparent; }
+  ::-webkit-scrollbar-thumb { border-radius: 99px; border: 3px solid transparent; background: rgba(255, 255, 255, .22) padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, .36); }
   body { margin: 0; min-height: 100vh; color: var(--ink); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
-  html.mica body { background: linear-gradient(180deg, rgba(10, 14, 22, .46), rgba(10, 14, 22, .62)); }
 
   /* ambient field (static, drawn once) and the liquid drop that follows the cursor */
   #ambient { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none;
     background: radial-gradient(1200px 700px at 10% -10%, #1C2540 0%, transparent 60%), radial-gradient(900px 600px at 110% 110%, #1A1730 0%, transparent 60%), linear-gradient(160deg, #0E1422, #0A0E17); }
-  html.mica #ambient { background: none; opacity: .55; }
+  html.mica #ambient { background: none; opacity: .35; }
   #ambient i { position: absolute; border-radius: 50%; filter: blur(70px); opacity: .55; }
   #ambient .b1 { width: 420px; height: 420px; left: -120px; top: 80px; background: #6D3E8C; }
   #ambient .b2 { width: 380px; height: 380px; right: -140px; top: 420px; background: #8A2F5E; }
@@ -46,30 +68,66 @@
     background: radial-gradient(circle at 38% 32%, rgba(255, 255, 255, .30), rgba(246, 169, 203, .20) 30%, rgba(150, 120, 255, .12) 55%, transparent 70%);
     filter: blur(14px); opacity: 0; transition: opacity .5s ease; will-change: transform; }
   #liquid.on { opacity: 1; }
+  /* over a bright window the cursor's light would wash out the text under it, so it is fainter there */
+  html.mica #liquid.on { opacity: .2; }
+  html.mica .glass { --glow: .04; }
+
+  /* Floating: the window is invisible (no frame, background, tint or blur), so only the panels show, as
+     near-opaque dark glass over the bare desktop. The page scrolls inside body, which fades its content out at
+     an edge where it is cut off, and the scrollbar is a dark glass thumb kept clear of the 6 px resize band. */
+  html.float { --pane: rgba(12, 15, 24, .92); --sheet: rgba(15, 19, 30, .93); background: transparent; overflow: hidden; scrollbar-gutter: auto; }
+  html.float #ambient, html.float #liquid { display: none; }
+  html.float body { height: 100vh; overflow-y: auto; scrollbar-gutter: stable; --ft: 0px; --fb: 0px;
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 var(--ft), #000 calc(100% - var(--fb)), transparent); }
+  html.float.cut-top body { --ft: 24px; }
+  html.float.cut-bottom body { --fb: 24px; }
+  html.float.lock body { overflow: hidden; }
+  html.float body::-webkit-scrollbar { width: 16px; }
+  html.float body::-webkit-scrollbar-thumb { border: 3px solid transparent; border-right-width: 7px; background: rgba(14, 18, 28, .92) padding-box;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .26), inset 0 1px 0 rgba(255, 255, 255, .4); }
+  html.float body::-webkit-scrollbar-thumb:hover { background-color: rgba(34, 40, 56, .96); }
+  /* a panel is open: no dark backdrop over the desktop; the panels behind it step back instead */
+  html.float .sheet::backdrop { background: transparent; }
+  html.float main { transition: opacity .22s ease, filter .22s ease; }
+  html.float:has(.sheet.in) main { opacity: .45; filter: blur(1.5px) saturate(.8); }
 
   main { max-width: 640px; margin: 0 auto; padding: 22px 20px 30px; display: grid; gap: 14px; }
 
-  /* the glass surface used everywhere */
+  /* the glass surface used everywhere: a faint fill with a sheen in its top corner, a top highlight, layered shadows */
   .glass { position: relative; isolation: isolate; border-radius: 20px;
-    background: linear-gradient(180deg, var(--glass-2), var(--glass) 40%), rgba(16, 22, 34, .55);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .20), inset 0 0 0 1px var(--rim), inset 0 -1px 0 rgba(0, 0, 0, .25), 0 12px 32px var(--shade); }
-  /* light that the cursor brings to the surface, and to the rim */
-  .glass::before, .glass::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .35s ease; z-index: -1; }
-  .glass::before { background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .085), transparent 70%); }
-  .glass::after { z-index: 1; padding: 1px; background: radial-gradient(180px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .55), rgba(246, 169, 203, .25) 40%, transparent 70%);
+    background: radial-gradient(130% 90% at 0% 0%, rgba(255, 255, 255, .06), transparent 55%), linear-gradient(180deg, var(--glass-2), var(--glass) 42%, rgba(255, 255, 255, .015)), var(--pane);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 16px 30px -26px rgba(255, 255, 255, .5), inset 0 -1px 0 rgba(0, 0, 0, .22), var(--depth); }
+  /* light that the cursor brings to the surface */
+  .glass::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1; opacity: 0; transition: opacity .35s ease;
+    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, var(--glow, .085)), transparent 70%); }
+  .glass.lit::before { opacity: 1; }
+  /* the rim of every glass surface: one masked gradient border. On panels the cursor's light runs along it too. */
+  .glass::after, button::after, .sheet::after { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; background: var(--edge);
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
-  .glass.lit::before, .glass.lit::after { opacity: 1; }
+  .glass::after { z-index: 1; transition: --lit .35s ease;
+    background: radial-gradient(180px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, calc(var(--lit) * .55)), rgba(246, 169, 203, calc(var(--lit) * .25)) 40%, transparent 70%), var(--edge); }
+  .glass.lit::after { --lit: 1; }
+  /* glass inside glass (a row in a panel) needs no more darkening */
+  .glass .glass { --pane: rgba(14, 18, 28, .28); }
 
-  header { display: flex; gap: 14px; align-items: center; padding: 6px 4px 2px; }
+  header { display: flex; gap: 10px; align-items: center; padding: 12px 12px 12px 12px; }
   header img { width: 58px; height: 58px; flex: none; filter: drop-shadow(0 8px 16px rgba(0, 0, 0, .35)); }
   h1 { margin: 0; font: 650 27px/1.1 var(--display); letter-spacing: -.012em; }
-  .lede { margin: 3px 0 0; color: var(--ink-soft); }
+  .lede { margin: 3px 0 0; color: var(--ink-soft); text-wrap: balance; }
   header .side { margin-left: auto; align-self: flex-start; flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-  button.coffee { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; flex: none; padding: 6px 12px 6px 10px; border-radius: 99px; font: 600 12.5px var(--font);
+  header .top { display: flex; align-items: center; gap: 8px; }
+  /* minimize and close, only when the window has no frame of its own */
+  .winctl { display: none; gap: 6px; }
+  html.float .winctl { display: flex; }
+  .winctl button { width: 26px; height: 26px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+  .winctl svg { width: 10px; height: 10px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; fill: none; }
+  .winctl .close:hover { --edge: var(--edge-on); color: #fff; background: linear-gradient(180deg, #F27A86, #D63A4E); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 4px 12px -2px rgba(214, 58, 78, .5); }
+  button.coffee { --edge: var(--edge-on); display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; flex: none; padding: 6px 12px 6px 10px; border-radius: 99px; font: 600 12.5px var(--font);
             color: #2b1600; background: linear-gradient(180deg, #ffe680, #ffc93d); box-shadow: 0 4px 14px rgba(255, 196, 40, .28), inset 0 1px 0 rgba(255, 255, 255, .7), inset 0 0 0 1px rgba(120, 70, 0, .25); }
   button.coffee svg { width: 16px; height: 16px; fill: currentColor; }
   button.coffee:hover { background: linear-gradient(180deg, #fff0a8, #ffd25a); box-shadow: 0 6px 18px rgba(255, 196, 40, .38), inset 0 1px 0 rgba(255, 255, 255, .8), inset 0 0 0 1px rgba(120, 70, 0, .3); }
-  .ver { font-size: 12px; color: var(--ink-faint); padding: 3px 10px; border-radius: 99px; box-shadow: inset 0 0 0 1px var(--rim); white-space: nowrap; }
+  .ver { font-size: 12px; color: var(--ink-soft); padding: 3px 10px; border-radius: 99px; white-space: nowrap;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .02)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), inset 0 0 0 1px var(--rim); }
 
   section.glass, details.glass { padding: 16px 18px; display: grid; gap: 12px; }
   details.glass:not([open]) { display: block; }
@@ -88,21 +146,22 @@
   kbd { font: 600 12px var(--font); padding: 1px 7px; border-radius: 6px; white-space: nowrap; background: rgba(255, 255, 255, .08); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 0 0 1px var(--rim), 0 1px 0 rgba(0, 0, 0, .35); }
   code { font: 12.5px ui-monospace, Consolas, monospace; padding: 2px 6px; border-radius: 6px; background: rgba(0, 0, 0, .28); box-shadow: inset 0 0 0 1px var(--rim); word-break: break-all; -webkit-user-select: all; user-select: all; }
 
-  /* glass buttons */
-  button { font: 600 13px var(--font); color: var(--ink); cursor: pointer; border: 0; border-radius: 12px; padding: 9px 15px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .06));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .24), inset 0 0 0 1px var(--rim), 0 4px 12px rgba(0, 0, 0, .22);
+  /* glass buttons (their rim is the shared ::after above) */
+  button { position: relative; font: 600 13px var(--font); color: var(--ink); cursor: pointer; border: 0; border-radius: 12px; padding: 9px 15px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .05) 55%, rgba(255, 255, 255, .07));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .20), inset 0 -1px 0 rgba(0, 0, 0, .14), 0 1px 1px rgba(0, 0, 0, .18), 0 4px 12px -3px rgba(0, 0, 0, .32);
     transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
-  button:hover { background: linear-gradient(180deg, rgba(255, 255, 255, .20), rgba(255, 255, 255, .09)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), inset 0 0 0 1px var(--rim-hi), 0 6px 16px rgba(0, 0, 0, .26); transform: translateY(-1px); }
+  button:hover { --edge: var(--edge-hi); background: linear-gradient(180deg, rgba(255, 255, 255, .19), rgba(255, 255, 255, .08) 55%, rgba(255, 255, 255, .10));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -1px 0 rgba(0, 0, 0, .14), 0 1px 1px rgba(0, 0, 0, .18), 0 8px 18px -4px rgba(0, 0, 0, .36); transform: translateY(-1px); }
   button:active { transform: translateY(0) scale(.98); }
-  button.primary { color: var(--accent-ink); background: linear-gradient(180deg, #FBC4DC, var(--accent-strong)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 0 0 1px rgba(255, 255, 255, .25), 0 6px 18px rgba(242, 125, 178, .28); }
+  button.primary { --edge: var(--edge-on); color: var(--accent-ink); background: linear-gradient(180deg, #FBC4DC, var(--accent-strong)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 -1px 0 rgba(120, 20, 70, .18), 0 6px 18px -2px rgba(242, 125, 178, .38); }
   button:disabled { opacity: .5; cursor: default; transform: none; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* playing now */
   .list { display: grid; gap: 8px; }
   .src { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 10px 8px 8px; border-radius: 16px; }
-  .src.active { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .24), inset 0 0 0 1px rgba(246, 169, 203, .45), 0 10px 26px var(--shade); }
+  .src.active { --edge: var(--edge-pink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .24), inset 0 16px 30px -26px rgba(255, 255, 255, .5), 0 0 22px -6px rgba(242, 125, 178, .35), var(--depth); }
   .src img, .src .ph { width: 54px; height: 54px; border-radius: 12px; object-fit: cover; display: block; box-shadow: 0 4px 10px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(255, 255, 255, .12); }
   .src .ph { background: linear-gradient(135deg, #3b4a66, #1d2433); }
   .src .txt { min-width: 0; }
@@ -119,18 +178,22 @@
   .keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
   .keys .group { grid-column: 1 / -1; margin: 4px 0 -2px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); }
   .key { padding: 10px 12px; border-radius: 13px; text-align: center; font-weight: 600; }
-  .key[aria-checked="true"] { color: var(--accent-ink); background: linear-gradient(180deg, #FBC4DC, var(--accent-strong)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 0 0 1px rgba(255, 255, 255, .3), 0 6px 18px rgba(242, 125, 178, .30); }
+  .key[aria-checked="true"] { --edge: var(--edge-on); color: var(--accent-ink); background: linear-gradient(180deg, #FBC4DC, var(--accent-strong)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 -1px 0 rgba(120, 20, 70, .18), 0 6px 18px -2px rgba(242, 125, 178, .40); }
 
   /* layout tiles with a small picture of each layout */
   .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .tile { display: grid; gap: 10px; justify-items: center; padding: 14px 12px 12px; border-radius: 18px; text-align: center; }
   .tile small { display: block; font-weight: 400; color: var(--ink-soft); font-size: 12px; }
-  .tile[aria-checked="true"] { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 0 0 1.5px var(--accent), 0 8px 24px rgba(242, 125, 178, .22); }
+  /* a chosen tile: pink-lit glass */
+  .tile[aria-checked="true"], .skin[aria-checked="true"] { --edge: var(--edge-pink); background: linear-gradient(180deg, rgba(246, 169, 203, .22), rgba(246, 169, 203, .07) 55%, rgba(246, 169, 203, .12));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .30), inset 0 0 0 1px rgba(246, 169, 203, .35), 0 1px 1px rgba(0, 0, 0, .18), 0 10px 26px -8px rgba(242, 125, 178, .50); }
+  .tile[aria-checked="true"]::after, .skin[aria-checked="true"]::after { padding: 1.5px; }
   .mini { position: relative; width: 150px; height: 92px; }
   .mini i { position: absolute; border-radius: 6px; background: linear-gradient(180deg, rgba(255, 255, 255, .30), rgba(255, 255, 255, .10)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28); transition: transform .45s cubic-bezier(.2, .8, .2, 1); }
   .mini i.front { background: linear-gradient(180deg, #FBC4DC, #E86BA6); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5), 0 4px 10px rgba(0, 0, 0, .3); }
   .mini i.dot { border-radius: 50%; width: 9px; height: 9px; background: rgba(255, 255, 255, .55); box-shadow: none; }
   .mini i.pill { border-radius: 99px; height: 7px; width: 26px; background: rgba(255, 255, 255, .4); box-shadow: none; }
+  .mini i.pill::before { content: none; } /* not the status chip's dot */
   .tile:hover .mini.v i.up { transform: translateY(-3px); }
   .tile:hover .mini.v i.dn { transform: translateY(3px); }
   .tile:hover .mini.h i.lf { transform: translateX(-3px); }
@@ -141,11 +204,14 @@
   h2 .small { margin-left: auto; padding: 6px 12px; font-size: 12.5px; border-radius: 99px; }
   .tiles.four .tile { padding: 12px 10px 10px; }
   .tiles.four .mini { transform: scale(.86); margin: -6px 0; }
-  /* five styles: three on top, two below */
-  .tiles.five { grid-template-columns: repeat(6, 1fr); }
-  .tiles.five .tile { grid-column: span 2; }
-  .tiles.five .tile:nth-child(n+4) { grid-column: span 3; }
-  .tiles.five .mini { transform: scale(.8); margin: -9px -15px; }
+  /* six styles: two rows of three, or three rows of two when the window is narrow */
+  .tiles.six { grid-template-columns: repeat(3, 1fr); }
+  .tiles.six .mini { transform: scale(.8); margin: -9px -15px; }
+  @media (max-width: 520px) { .tiles.six { grid-template-columns: 1fr 1fr; } }
+  /* freaky random: small cards drift apart on hover */
+  .mini.rand i { transition: translate .45s cubic-bezier(.2, .8, .2, 1); }
+  .tile:hover .mini.rand i:nth-child(odd):not(.front) { translate: -2px -3px; }
+  .tile:hover .mini.rand i:nth-child(even):not(.front) { translate: 3px 2px; }
   .tile:hover .mini.orbit i.ring { transform: translateY(-3px); }
   .mini.flow { perspective: 160px; }
   .mini.flow i.lf { transform: rotateY(48deg); }
@@ -158,27 +224,51 @@
   .slider { display: grid; grid-template-columns: 52px 1fr 44px; align-items: center; gap: 12px; }
   .slider output { text-align: right; color: var(--ink-soft); font-variant-numeric: tabular-nums; font-size: 13px; }
   input[type=range] { -webkit-appearance: none; appearance: none; height: 30px; background: transparent; }
-  input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--accent-strong) 0 var(--v, 50%), rgba(255, 255, 255, .14) var(--v, 50%)); box-shadow: inset 0 0 0 1px var(--rim); }
+  /* a glass groove, filled with pink up to the value, and a pearl thumb */
+  input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px;
+    background: linear-gradient(90deg, #E86BA6, #F9BBD6) 0 0 / var(--v, 50%) 100% no-repeat, rgba(0, 0, 0, .30);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .06), 0 1px 0 rgba(255, 255, 255, .08); }
   input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -8px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #fff, #E9EEF6 60%, #C9D2E0); box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
-  /* skins: a little card in each skin's own colours */
-  .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-  .skin { display: grid; gap: 8px; padding: 10px; border-radius: 16px; text-align: left; }
-  .skin[aria-checked="true"] { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 0 0 1.5px var(--accent), 0 8px 24px rgba(242, 125, 178, .22); }
+    background: radial-gradient(circle at 35% 28%, #fff, #EEF2F8 48%, #C6CFDD);
+    box-shadow: inset 0 1px 0 #fff, inset 0 -1px 2px rgba(0, 0, 0, .14), 0 0 0 .5px rgba(0, 0, 0, .25), 0 2px 7px rgba(0, 0, 0, .38); }
+  /* skins: a little card in each skin's own colours. The Liquid Glass tile comes first and its colour strip
+     takes the whole next row; dense packing fills the rest of the tile's row with the other skins. */
+  .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-flow: row dense; gap: 10px; }
+  .skins-list { display: contents; }
+  .skin { order: 2; display: grid; gap: 8px; padding: 10px; border-radius: 16px; text-align: left; }
+  .skin.glassy { order: 0; }
   .skin .sw { height: 54px; border-radius: 10px; position: relative; overflow: hidden; display: flex; align-items: flex-end; padding: 6px 8px; box-sizing: border-box; }
   .skin .sw b { font-size: 13px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .skin .sw i { position: absolute; right: 8px; top: 8px; width: 18px; height: 18px; border-radius: 50%; }
   .skin small { display: block; color: var(--ink-soft); font-size: 12px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .skin small.err { color: var(--warn); white-space: normal; }
+  /* the Liquid Glass colour strip: a groove with a little notch pointing up at the tile */
+  .hue { order: 1; grid-column: 1 / -1; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 10px;
+    margin-top: -2px; padding: 9px 10px 4px 14px; border-radius: 16px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, .26), rgba(0, 0, 0, .14)); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .40), 0 1px 0 rgba(255, 255, 255, .07); }
+  .hue::before { content: ""; position: absolute; left: 70px; top: -6px; width: 12px; height: 6px; background: rgba(0, 0, 0, .26); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .hue label { font: 600 13px var(--font); }
+  .hue label span { font-weight: 400; color: var(--ink-soft); margin-left: 6px; }
+  .hue button { padding: 5px 12px; font-size: 12.5px; border-radius: 99px; }
+  .hue input { grid-column: 1 / -1; width: 100%; }
+  .hue input::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; box-shadow: inset 0 1px 2px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .10);
+    background: linear-gradient(90deg, hsl(0 85% 66%), hsl(60 85% 62%), hsl(120 70% 58%), hsl(180 75% 58%), hsl(240 85% 70%), hsl(300 75% 66%), hsl(359 85% 66%)); }
+  .hue input::-webkit-slider-thumb { margin-top: -7px; background: radial-gradient(circle at 35% 28%, #fff, var(--hc, #EEF2F8) 52%, color-mix(in srgb, var(--hc, #C6CFDD) 70%, #000)); }
+  /* the original glass: the rainbow only hints, and the thumb is clear */
+  .hue input.orig::-webkit-slider-runnable-track { opacity: .5; }
+  .hue :disabled { opacity: .4; }
 
   /* glass switches */
   .opt { display: flex; align-items: center; gap: 14px; }
   .opt span { flex: 1; }
   .opt small { display: block; color: var(--ink-soft); font-size: 13px; }
-  .switch { flex: none; width: 50px; height: 30px; padding: 0; border-radius: 99px; position: relative; }
+  .switch { flex: none; width: 50px; height: 30px; padding: 0; border-radius: 99px; position: relative;
+    background: linear-gradient(180deg, rgba(0, 0, 0, .30), rgba(255, 255, 255, .06)); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .45), 0 1px 0 rgba(255, 255, 255, .07); }
+  .switch:hover { background: linear-gradient(180deg, rgba(0, 0, 0, .22), rgba(255, 255, 255, .11)); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .45), 0 1px 0 rgba(255, 255, 255, .07); transform: none; }
   .switch::before { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #fff, #E9EEF6 60%, #C9D2E0); box-shadow: 0 2px 6px rgba(0, 0, 0, .35), inset 0 -1px 2px rgba(0, 0, 0, .15); transition: transform .25s cubic-bezier(.2, .8, .2, 1); }
-  .switch[aria-checked="true"] { background: linear-gradient(180deg, #FBC4DC, var(--accent-strong)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), inset 0 0 0 1px rgba(255, 255, 255, .25), 0 4px 14px rgba(242, 125, 178, .3); }
+    background: radial-gradient(circle at 35% 28%, #fff, #EEF2F8 48%, #C6CFDD); box-shadow: inset 0 1px 0 #fff, inset 0 -1px 2px rgba(0, 0, 0, .14), 0 1px 1px rgba(0, 0, 0, .25), 0 3px 8px rgba(0, 0, 0, .32);
+    transition: transform .3s cubic-bezier(.3, 1.35, .5, 1); }
+  .switch[aria-checked="true"] { --edge: var(--edge-on); background: linear-gradient(180deg, #FBC4DC, var(--accent-strong)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), inset 0 -1px 0 rgba(120, 20, 70, .18), 0 4px 14px -2px rgba(242, 125, 178, .42); }
   .switch[aria-checked="true"]::before { transform: translateX(20px); }
 
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -188,14 +278,52 @@
   .status:empty { min-height: 0; }
   .status.ok { color: var(--good); }
   .status.err { color: var(--warn); }
-  .pill { display: inline-flex; align-items: center; gap: 7px; font: 500 12.5px var(--font); color: var(--ink-soft); padding: 3px 10px 3px 8px; border-radius: 99px; box-shadow: inset 0 0 0 1px var(--rim); }
+  .pill { display: inline-flex; align-items: center; gap: 7px; font: 500 12.5px var(--font); color: var(--ink-soft); padding: 3px 10px 3px 8px; border-radius: 99px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .02)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), inset 0 0 0 1px var(--rim); }
   .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #5B6680; }
   .pill.on { color: var(--good); }
   .pill.on::before { background: var(--good); box-shadow: 0 0 10px rgba(142, 230, 194, .8); }
   .hid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 10px 9px 14px; border-radius: 14px; }
   .hid b, .hid span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .hid span { color: var(--ink-soft); font-size: 13px; }
-  footer { color: var(--ink-faint); font-size: 12.5px; padding: 0 4px; }
+  /* a small glass plate, so the path stays readable over a bright window */
+  footer { justify-self: start; color: var(--ink-faint); font-size: 12.5px; padding: 6px 12px; border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02)), var(--pane); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10), inset 0 0 0 1px var(--rim); }
+
+  /* Look and Skin: one row each, with a tiny picture of the current choice and a button that opens its panel */
+  section.pickrow { grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 12px 14px 12px 12px; }
+  .pickrow h2 { display: block; }
+  .pickrow .name { display: block; font: 400 13px var(--font); color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pickrow .hint { display: flex; gap: 4px; color: var(--ink-faint); }
+  .skin-mini, .look-mini { position: relative; width: 56px; height: 46px; border-radius: 13px; flex: none; overflow: hidden;
+    background: radial-gradient(90% 70% at 30% 0%, rgba(255, 255, 255, .10), transparent 70%), rgba(0, 0, 0, .26); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .45), 0 1px 0 rgba(255, 255, 255, .08); }
+  /* the current style's own tile picture, shrunk */
+  .look-mini .mini { position: absolute; left: 50%; top: 50%; margin: -46px 0 0 -75px; transform: scale(.34); }
+  .skin-mini i { position: absolute; left: 50%; border-radius: 4px; }
+  .skin-mini .c1 { top: 4px; width: 32px; height: 8px; margin-left: -16px; opacity: .5; }
+  .skin-mini .c2 { top: 14px; width: 42px; height: 19px; margin-left: -21px; border-radius: 5px; }
+  .skin-mini .c3 { top: 35px; width: 32px; height: 8px; margin-left: -16px; opacity: .5; }
+  .skin-mini b { position: absolute; left: 5px; bottom: 5px; width: 17px; height: 2.5px; border-radius: 2px; }
+  .skin-mini u { position: absolute; right: 4px; top: 4px; width: 7px; height: 7px; border-radius: 50%; }
+
+  /* the Look and Skin panels: glass sheets over Settings, grown from the button that opened them */
+  .sheet { position: fixed; inset: 0; margin: auto; padding: 0; border: 0; width: min(600px, calc(100vw - 32px)); max-width: none; height: fit-content; max-height: calc(100vh - 40px);
+    overflow: hidden; color: var(--ink); border-radius: 26px;
+    background: radial-gradient(120% 70% at 0% 0%, rgba(255, 255, 255, .10), transparent 55%), linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .03) 35%, rgba(255, 255, 255, .02)), var(--sheet, rgba(17, 21, 33, .62));
+    -webkit-backdrop-filter: blur(28px) saturate(170%); backdrop-filter: blur(28px) saturate(170%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .26), inset 0 18px 36px -28px rgba(255, 255, 255, .45), 0 2px 6px rgba(0, 0, 0, .22), 0 24px 60px -12px rgba(0, 0, 0, .55), 0 60px 120px -40px rgba(0, 0, 0, .6);
+    opacity: 0; transform: scale(.9); transition: opacity .2s cubic-bezier(.4, 0, 1, 1), transform .22s cubic-bezier(.4, 0, 1, 1); }
+  .sheet[open] { display: flex; flex-direction: column; }
+  /* in: a quick fade and a springy grow with a little overshoot */
+  .sheet.in { opacity: 1; transform: none; transition: opacity .18s cubic-bezier(0, 0, .2, 1), transform .26s cubic-bezier(.3, 1.32, .5, 1); }
+  .sheet::after { --edge: var(--edge-hi); z-index: 1; }
+  .sheet::backdrop { background: rgba(4, 6, 12, .40); opacity: 0; transition: opacity .22s ease; }
+  .sheet.in::backdrop { opacity: 1; }
+  .sheet-in { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 16px 18px 20px 20px; display: grid; gap: 12px; }
+  .sheet-head { display: flex; align-items: center; gap: 10px; }
+  .sheet-head h2 { font-size: 17px; }
+  .sheet-head .x { margin-left: auto; flex: none; width: 34px; height: 34px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+  .sheet-head .x svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; fill: none; }
 
   /* calm entrance */
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -205,6 +333,9 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
     #liquid { display: none; }
+    /* the panels only fade */
+    .sheet, .sheet.in { transform: none !important; transition: opacity .2s ease !important; }
+    .sheet::backdrop { transition: opacity .2s ease !important; }
   }
 </style>
 </head>
@@ -212,14 +343,20 @@
 <div id="ambient" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
 <div id="liquid" aria-hidden="true"></div>
 <main>
-  <header>
+  <header class="glass">
     <img src="skipdat.png" alt="">
     <div>
       <h1>Skip Dat</h1>
       <p class="lede">Every music app's queue, one <kbd class="trig">Alt</kbd> + scroll away.</p>
     </div>
     <div class="side">
-      <span class="ver" id="ver"></span>
+      <div class="top">
+        <span class="ver" id="ver"></span>
+        <span class="winctl">
+          <button type="button" id="win-min" aria-label="Minimize"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 5h7"/></svg></button>
+          <button type="button" class="close" id="win-close" aria-label="Close Settings"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"/></svg></button>
+        </span>
+      </div>
       <button type="button" class="coffee" id="coffee" title="buymeacoffee.com/ffoouuaadd">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13v5.5A5.5 5.5 0 0 1 11.5 19h-2A5.5 5.5 0 0 1 4 13.5zm13 1.5h1.3a2.7 2.7 0 0 1 0 5.4H17v-1.8h1.3a.9.9 0 0 0 0-1.8H17zM7.2 3.6c.5.7.5 1.3 0 2 -.3.4-.3.8 0 1.2l-1.2.8c-.7-.9-.7-2 0-2.9.2-.3.2-.6 0-.9zm3.5 0c.5.7.5 1.3 0 2-.3.4-.3.8 0 1.2l-1.2.8c-.7-.9-.7-2 0-2.9.2-.3.2-.6 0-.9z"/></svg>
         Buy me a coffee
@@ -259,10 +396,73 @@
     </ul>
   </section>
 
-  <section class="glass" aria-labelledby="h-layout">
-    <h2 id="h-layout">Look</h2>
+  <section class="glass pickrow" aria-labelledby="h-look-row">
+    <span class="look-mini" id="look-mini" aria-hidden="true"></span>
+    <div><h2 id="h-look-row">Look</h2><span class="name" id="look-name"></span></div>
+    <span class="hint" aria-hidden="true"><kbd>Ctrl</kbd><kbd>L</kbd></span>
+    <button type="button" id="look-open" aria-haspopup="dialog" aria-controls="look-panel" aria-keyshortcuts="Control+L" aria-label="Change look">Change</button>
+  </section>
+
+  <section class="glass pickrow" aria-labelledby="h-skin-row">
+    <span class="skin-mini" id="skin-mini" aria-hidden="true"><i class="c1"></i><i class="c2"><b></b><u></u></i><i class="c3"></i></span>
+    <div><h2 id="h-skin-row">Skin</h2><span class="name" id="skin-name"></span></div>
+    <span class="hint" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span>
+    <button type="button" id="skin-open" aria-haspopup="dialog" aria-controls="skin-panel" aria-keyshortcuts="Control+K" aria-label="Change skin">Change</button>
+  </section>
+
+  <section class="glass" aria-labelledby="h-ext">
+    <h2 id="h-ext">Browser companion <span class="pill" id="ext-pill">Not connected</span></h2>
+    <p class="muted">For YouTube Music, YouTube and SoundCloud in Chrome, Edge, Brave or Opera: it lets Skip Dat see their whole queue (mixes and radio included) and play any song in it. Without it, music in your browser still shows up, but only the song that's on.</p>
+    <ol>
+      <li>Open <code>chrome://extensions</code> <button type="button" id="copy-ext">Copy</button> in a new tab (Edge: <code>edge://extensions</code>).</li>
+      <li>Turn on <b>Developer mode</b>.</li>
+      <li>Click <b>Load unpacked</b> and choose the <b>browser-companion</b> folder. <button type="button" id="open-folder">Show folder</button></li>
+      <li>Reload any music tab that's already open.</li>
+    </ol>
+    <p class="muted" id="ext-folder"></p>
+    <p class="status" id="ext-status" role="status"></p>
+  </section>
+
+  <section class="glass" aria-labelledby="h-hidden" id="hidden-box" hidden>
+    <h2 id="h-hidden">Not shown in the wheel</h2>
+    <p class="muted">Skip Dat only shows music. These are playing something it doesn't count as music, like chat apps, social video or ordinary YouTube videos.</p>
+    <div class="list" id="hidden"></div>
+  </section>
+
+  <section class="glass" aria-labelledby="h-opt">
+    <h2 id="h-opt">Options</h2>
+    <div class="opt"><span id="l-perf">Performance mode<small>For gaming and slower PCs: no blur, glass, shadows, animations or album art. The carousel uses much less of your graphics card and processor.</small></span><button type="button" class="switch" role="switch" id="perf" aria-labelledby="l-perf"></button></div>
+    <div class="opt"><span id="l-pause">Pause other music when I pick a song<small>So only one thing plays at a time.</small></span><button type="button" class="switch" role="switch" id="pause-others" aria-labelledby="l-pause"></button></div>
+    <div class="opt"><span id="l-auto">Start with Windows<small>Skip Dat waits in the tray, ready for the shortcut.</small></span><button type="button" class="switch" role="switch" id="autostart" aria-labelledby="l-auto"></button></div>
+    <p class="status" id="opt-status" role="status"></p>
+  </section>
+
+  <details class="glass" id="adv">
+    <summary>Spotify's upcoming songs <small>optional</small></summary>
+    <p class="muted">Windows doesn't share what Spotify plays next. To see it, connect a Spotify developer app (Spotify requires its owner to have Premium).</p>
+    <ol>
+      <li>Open the <a href="#" id="dash">Spotify developer dashboard</a>, create an app (any name), tick <b>Web API</b>.</li>
+      <li>Add this Redirect URI: <code id="redirect">http://127.0.0.1:8898/callback</code> <button type="button" id="copy-redirect">Copy</button></li>
+      <li>Paste the app's Client ID, then connect.</li>
+    </ol>
+    <div class="row">
+      <input type="text" id="client" placeholder="Client ID" aria-label="Spotify Client ID" autocomplete="off" spellcheck="false">
+      <button type="button" class="primary" id="connect">Connect</button>
+      <button type="button" id="disconnect" hidden>Disconnect</button>
+    </div>
+    <p class="status" id="status" role="status"></p>
+  </details>
+
+  <footer id="cfg"></footer>
+</main>
+<dialog class="sheet" id="look-panel" role="dialog" aria-modal="true" aria-labelledby="h-layout">
+  <div class="sheet-in">
+    <div class="sheet-head">
+      <h2 id="h-layout">Look <span class="sub">style, size and depth</span></h2>
+      <button type="button" class="x" id="look-close" aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"/></svg></button>
+    </div>
     <h3 id="h-style">Style</h3>
-    <div class="tiles four five" role="radiogroup" aria-labelledby="h-style" id="styles">
+    <div class="tiles four six" role="radiogroup" aria-labelledby="h-style" id="styles">
       <button type="button" class="tile" role="radio" data-style="wheel">
         <span class="mini v" aria-hidden="true">
           <i class="up" style="left:44px;top:4px;width:40px;height:22px"></i>
@@ -315,6 +515,20 @@
         </span>
         <span>Compact<small>Just the titles, small</small></span>
       </button>
+      <button type="button" class="tile" role="radio" data-style="random">
+        <span class="mini rand" aria-hidden="true">
+          <i style="left:12px;top:8px;width:20px;height:15px;opacity:.55;rotate:-9deg"></i>
+          <i style="left:110px;top:3px;width:26px;height:20px;opacity:.75;rotate:7deg"></i>
+          <i style="left:14px;top:40px;width:24px;height:18px;opacity:.7;rotate:5deg"></i>
+          <i style="left:118px;top:38px;width:15px;height:12px;opacity:.45;rotate:-12deg"></i>
+          <i style="left:32px;top:70px;width:16px;height:12px;opacity:.5;rotate:-6deg"></i>
+          <i style="left:104px;top:64px;width:22px;height:17px;opacity:.65;rotate:10deg"></i>
+          <i style="left:70px;top:4px;width:12px;height:10px;opacity:.4;rotate:14deg"></i>
+          <i style="left:68px;top:76px;width:13px;height:11px;opacity:.5;rotate:-4deg"></i>
+          <i class="front" style="left:50px;top:21px;width:50px;height:48px"></i>
+        </span>
+        <span>Freaky Random<small>Songs float all over</small></span>
+      </button>
     </div>
     <div id="wheel-dir">
       <h3 id="h-dir">Wheel direction</h3>
@@ -351,64 +565,32 @@
     <label class="slider"><span>Blur</span><input type="range" id="depth-blur" min="0" max="100" step="1"><output id="depth-blur-v"></output></label>
     <label class="slider"><span>Fade</span><input type="range" id="depth-fade" min="0" max="100" step="1"><output id="depth-fade-v"></output></label>
     <p class="status" id="layout-status" role="status"></p>
-  </section>
-
-  <section class="glass" aria-labelledby="h-skin">
-    <h2 id="h-skin">Skin <span class="sub">how the carousel looks</span></h2>
-    <div class="skins" role="radiogroup" aria-labelledby="h-skin" id="skins"></div>
+  </div>
+</dialog>
+<dialog class="sheet" id="skin-panel" role="dialog" aria-modal="true" aria-labelledby="h-skin">
+  <div class="sheet-in">
+    <div class="sheet-head">
+      <h2 id="h-skin">Skin <span class="sub">how the carousel looks</span></h2>
+      <button type="button" class="x" id="skin-close" aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"/></svg></button>
+    </div>
+    <div class="skins">
+      <!-- display: contents, so the tiles and the colour strip share one grid -->
+      <div class="skins-list" role="radiogroup" aria-labelledby="h-skin" id="skins"></div>
+      <!-- Liquid Glass colour: sits right under the row of the Liquid Glass tile -->
+      <div class="hue" id="hue-row" hidden>
+        <label for="glass-hue">Liquid Glass colour <span id="hue-name"></span></label>
+        <button type="button" id="hue-reset">Original</button>
+        <input type="range" id="glass-hue" min="0" max="359" step="1" aria-label="Liquid Glass colour">
+      </div>
+    </div>
     <div class="row">
       <button type="button" id="skins-folder">Open skins folder</button>
       <button type="button" id="skins-guide">How to make a skin</button>
     </div>
     <p class="muted">Skins in that folder show up here, and saving a skin's file updates the carousel straight away.</p>
     <p class="status" id="skin-status" role="status"></p>
-  </section>
-
-  <section class="glass" aria-labelledby="h-ext">
-    <h2 id="h-ext">Browser companion <span class="pill" id="ext-pill">Not connected</span></h2>
-    <p class="muted">For YouTube Music, YouTube and SoundCloud in Chrome, Edge, Brave or Opera: it lets Skip Dat see their whole queue (mixes and radio included) and play any song in it. Without it, music in your browser still shows up, but only the song that's on.</p>
-    <ol>
-      <li>Open <code>chrome://extensions</code> <button type="button" id="copy-ext">Copy</button> in a new tab (Edge: <code>edge://extensions</code>).</li>
-      <li>Turn on <b>Developer mode</b>.</li>
-      <li>Click <b>Load unpacked</b> and choose the <b>browser-companion</b> folder. <button type="button" id="open-folder">Show folder</button></li>
-      <li>Reload any music tab that's already open.</li>
-    </ol>
-    <p class="muted" id="ext-folder"></p>
-    <p class="status" id="ext-status" role="status"></p>
-  </section>
-
-  <section class="glass" aria-labelledby="h-hidden" id="hidden-box" hidden>
-    <h2 id="h-hidden">Not shown in the wheel</h2>
-    <p class="muted">Skip Dat only shows music. These are playing something it doesn't count as music, like chat apps, social video or ordinary YouTube videos.</p>
-    <div class="list" id="hidden"></div>
-  </section>
-
-  <section class="glass" aria-labelledby="h-opt">
-    <h2 id="h-opt">Options</h2>
-    <div class="opt"><span id="l-perf">Performance mode<small>For gaming and slower PCs: no blur, glass, shadows, animations or album art. The carousel uses much less of your graphics card and processor.</small></span><button type="button" class="switch" role="switch" id="perf" aria-labelledby="l-perf"></button></div>
-    <div class="opt"><span id="l-pause">Pause other music when I pick a song<small>So only one thing plays at a time.</small></span><button type="button" class="switch" role="switch" id="pause-others" aria-labelledby="l-pause"></button></div>
-    <div class="opt"><span id="l-auto">Start with Windows<small>Skip Dat waits in the tray, ready for the shortcut.</small></span><button type="button" class="switch" role="switch" id="autostart" aria-labelledby="l-auto"></button></div>
-    <p class="status" id="opt-status" role="status"></p>
-  </section>
-
-  <details class="glass" id="adv">
-    <summary>Spotify's upcoming songs <small>optional</small></summary>
-    <p class="muted">Windows doesn't share what Spotify plays next. To see it, connect a Spotify developer app (Spotify requires its owner to have Premium).</p>
-    <ol>
-      <li>Open the <a href="#" id="dash">Spotify developer dashboard</a>, create an app (any name), tick <b>Web API</b>.</li>
-      <li>Add this Redirect URI: <code id="redirect">http://127.0.0.1:8898/callback</code> <button type="button" id="copy-redirect">Copy</button></li>
-      <li>Paste the app's Client ID, then connect.</li>
-    </ol>
-    <div class="row">
-      <input type="text" id="client" placeholder="Client ID" aria-label="Spotify Client ID" autocomplete="off" spellcheck="false">
-      <button type="button" class="primary" id="connect">Connect</button>
-      <button type="button" id="disconnect" hidden>Disconnect</button>
-    </div>
-    <p class="status" id="status" role="status"></p>
-  </details>
-
-  <footer id="cfg"></footer>
-</main>
+  </div>
+</dialog>
 <script>
 (() => {
   const T = window.__TAURI__;
@@ -431,7 +613,17 @@
     keys.forEach(k => k.setAttribute('aria-checked', String(k.dataset.trigger === t)));
     $('trigger-hint').hidden = !t.startsWith('mouse-');
   }
-  function showLayout(l) { tiles.forEach(x => x.setAttribute('aria-checked', String(x.dataset.layout === l))); }
+  function showLayout(l) { tiles.forEach(x => x.setAttribute('aria-checked', String(x.dataset.layout === l))); showLookRow(); }
+  // the Look row: "Wheel · Vertical · Medium", and the chosen tile's own picture, shrunk
+  let rowPic = null;
+  function showLookRow() {
+    const on = list => list.find(x => x.getAttribute('aria-checked') === 'true');
+    const st = on(styleTiles), dir = st && st.dataset.style === 'wheel' ? on(tiles) : null, size = on(sizeKeys);
+    const title = t => t && t.querySelector('span:last-child').firstChild.textContent;
+    $('look-name').textContent = [title(st), title(dir), size && size.textContent].filter(Boolean).join(' · ');
+    const pic = dir || st;
+    if (pic && pic !== rowPic) { rowPic = pic; $('look-mini').replaceChildren(pic.querySelector('.mini').cloneNode(true)); }
+  }
   const setSwitch = (el, on) => el.setAttribute('aria-checked', String(!!on));
 
   // ---- playing now ----
@@ -514,7 +706,8 @@
       else if (!c.folder_exists) say($('ext-status'), 'The browser-companion folder is missing. Reinstall Skip Dat to get it back.', 'err');
       else if (on) say($('ext-status'), 'Your music tabs are talking to Skip Dat.', 'ok');
       else if ($('ext-status').className.includes('ok')) say($('ext-status'), '');
-      $('ver').textContent = 'Version ' + s.version;
+      $('ver').textContent = 'v' + s.version; // short, so the header keeps room for the window buttons
+      $('ver').setAttribute('aria-label', 'Version ' + s.version);
       $('cfg').textContent = 'Settings are saved in ' + s.config_file;
     } catch (e) { say($('opt-status'), String(e), 'err'); }
   }
@@ -541,34 +734,102 @@
     if (document.activeElement !== $('depth-blur')) setSlider($('depth-blur'), l.depth_blur);
     if (document.activeElement !== $('depth-fade')) setSlider($('depth-fade'), l.depth_fade);
     setSwitch($('perf'), l.perf);
+    if (document.activeElement !== hueEl) { setHue(l.glass_hue); hueSent = l.glass_hue == null ? null : l.glass_hue; }
+    showLookRow();
     renderSkins();
   }
+  // a skin's colours: its card, edge, text and button. Glass skins take the chosen glass colour (still see-through).
+  const isGlass = sk => !!(sk && sk.data && sk.data.base !== 'panel');
+  function skinPaint(sk, hue) {
+    const d = (sk && sk.data) || {}, card = d.card || {}, text = d.text || {}, btn = d.button || {};
+    return {
+      card: d.base === 'panel' ? `linear-gradient(180deg, ${card.top || '#2a2f3a'}, ${card.bottom || '#14171d'})`
+        : hue == null || !isGlass(sk) ? 'linear-gradient(160deg, rgba(255,255,255,.28), rgba(255,255,255,.06))'
+        : `linear-gradient(160deg, hsla(${hue}, 90%, 74%, .34), hsla(${hue}, 80%, 58%, .12))`,
+      edge: w => `inset 0 0 0 ${Math.min(card.edgeWidth || 1, w)}px ${card.edge || 'rgba(255,255,255,.3)'}`,
+      ink: text.color || '#fff',
+      dot: `linear-gradient(180deg, ${btn.top || '#FBC4DC'}, ${btn.bottom || '#E86BA6'})`,
+    };
+  }
+  let skinKey = '';
   function renderSkins() {
-    const box = $('skins'), cur = look && look.skin ? look.skin.id : '';
-    box.textContent = '';
-    for (const sk of skinList) {
-      const d = sk.data || {}, card = d.card || {}, text = d.text || {}, btn = d.button || {};
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'skin'; b.setAttribute('role', 'radio');
-      b.setAttribute('aria-checked', String(sk.id === cur)); b.disabled = !!sk.error;
-      const sw = document.createElement('span'); sw.className = 'sw';
-      sw.style.background = d.base === 'panel' ? `linear-gradient(180deg, ${card.top || '#2a2f3a'}, ${card.bottom || '#14171d'})` : 'linear-gradient(160deg, rgba(255,255,255,.28), rgba(255,255,255,.06))';
-      sw.style.boxShadow = `inset 0 0 0 ${Math.min(card.edgeWidth || 1, 3)}px ${card.edge || 'rgba(255,255,255,.3)'}`;
-      const name = document.createElement('b'); name.textContent = sk.name; name.style.color = text.color || '#fff';
-      const dot = document.createElement('i'); dot.style.background = `linear-gradient(180deg, ${btn.top || '#FBC4DC'}, ${btn.bottom || '#E86BA6'})`;
-      sw.append(name, dot);
-      const info = document.createElement('small');
-      if (sk.error) { info.className = 'err'; info.textContent = 'skin.json: ' + sk.error; }
-      else info.textContent = sk.builtin ? (sk.author ? 'Built in · ' + sk.author : 'Built in') : (sk.author ? 'by ' + sk.author : 'Your skin');
-      b.append(sw, info);
-      b.addEventListener('click', () => setLook({ skin: sk.id }, 'Saved. The carousel now uses ' + sk.name + '.'));
-      box.append(b);
+    const box = $('skins'), cur = look && look.skin ? look.skin.id || look.skin : '';
+    const sel = skinList.find(s => s.id === cur) || (look && look.skin && look.skin.id ? look.skin : null);
+    // the row: the skin's name and a tiny carousel in its colours
+    $('skin-name').textContent = sel ? sel.name : cur;
+    const hue = curHue(), p = skinPaint(sel, hue), mini = $('skin-mini');
+    mini.querySelectorAll('i').forEach(i => { i.style.background = p.card; i.style.boxShadow = p.edge(1); });
+    mini.querySelector('b').style.background = p.ink;
+    mini.querySelector('u').style.background = p.dot;
+    // the panel's tiles are rebuilt only when the list changes (Settings refreshes every few seconds,
+    // and rebuilding would throw away the focus of someone choosing with the keyboard)
+    const key = JSON.stringify(skinList);
+    if (key !== skinKey) {
+      skinKey = key;
+      const had = document.activeElement && box.contains(document.activeElement) ? document.activeElement.dataset.skin : null;
+      box.textContent = '';
+      // the colour strip goes under Liquid Glass (or the first glass skin)
+      const glassy = skinList.find(sk => sk.id === 'liquid-glass' && isGlass(sk)) || skinList.find(isGlass);
+      $('hue-row').hidden = !glassy;
+      for (const sk of skinList) {
+        const sp = skinPaint(sk);
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'skin' + (sk === glassy ? ' glassy' : ''); b.setAttribute('role', 'radio');
+        b.dataset.skin = sk.id; b.disabled = !!sk.error;
+        const sw = document.createElement('span'); sw.className = 'sw';
+        sw.style.boxShadow = sp.edge(3);
+        const name = document.createElement('b'); name.textContent = sk.name; name.style.color = sp.ink;
+        const dot = document.createElement('i'); dot.style.background = sp.dot;
+        sw.append(name, dot);
+        const info = document.createElement('small');
+        if (sk.error) { info.className = 'err'; info.textContent = 'skin.json: ' + sk.error; }
+        else info.textContent = sk.builtin ? (sk.author ? 'Built in · ' + sk.author : 'Built in') : (sk.author ? 'by ' + sk.author : 'Your skin');
+        b.append(sw, info);
+        b.addEventListener('click', () => setLook({ skin: sk.id }, 'Saved. The carousel now uses ' + sk.name + '.'));
+        box.append(b);
+        if (sk.id === had) b.focus();
+      }
     }
+    for (const b of box.children) b.setAttribute('aria-checked', String(b.dataset.skin === cur));
+    skinList.forEach((sk, i) => { box.children[i].firstChild.style.background = skinPaint(sk, hue).card; });
+    // the colour works on glass skins: dimmed, with a note, while another skin is chosen
+    const on = isGlass(sel);
+    hueEl.disabled = !on;
+    $('hue-reset').disabled = !on || hue == null;
+    $('hue-reset').style.visibility = hue == null ? 'hidden' : ''; // the label already says Original
+    $('hue-name').textContent = on ? hueName(hue) : 'for Liquid Glass';
   }
+  // ---- Liquid Glass colour: a hue, or null for the original glass ----
+  const hueEl = $('glass-hue');
+  const HUES = [[15, 'Red'], [40, 'Orange'], [68, 'Yellow'], [160, 'Green'], [195, 'Teal'], [255, 'Blue'], [290, 'Purple'], [335, 'Pink'], [360, 'Red']];
+  const hueName = h => (h == null ? 'Original' : HUES.find(([to]) => h < to)[1]);
+  const curHue = () => (hueEl.classList.contains('orig') ? null : +hueEl.value);
+  function setHue(h) {
+    h = h == null ? null : Math.round(h) % 360;
+    hueEl.classList.toggle('orig', h == null);
+    hueEl.value = h == null ? 0 : h;
+    if (h == null) hueEl.style.removeProperty('--hc'); else hueEl.style.setProperty('--hc', `hsl(${h} 90% 72%)`);
+    hueEl.setAttribute('aria-valuetext', h == null ? 'Original' : `${hueName(h)}, ${h} degrees`);
+  }
+  // while dragging: shown at once, saved once the slider rests for 120 ms, and on release
+  let hueT = 0, hueSent = null;
+  function sendHue(h) { clearTimeout(hueT); hueT = 0; if (h === hueSent) return; hueSent = h; setLook({ glass_hue: h }); }
+  hueEl.addEventListener('input', () => {
+    const h = +hueEl.value; setHue(h); renderSkins();
+    clearTimeout(hueT); hueT = setTimeout(() => sendHue(h), 120);
+  });
+  hueEl.addEventListener('change', () => sendHue(curHue()));
+  $('hue-reset').addEventListener('click', () => {
+    clearTimeout(hueT); hueT = 0; hueSent = null; setHue(null); renderSkins();
+    hueEl.focus(); // the button itself is now disabled
+    setLook({ glass_hue: null }, 'Back to the original glass.');
+  });
   async function setLook(patch, msg) {
-    try { await invoke('settings_set_look', { patch }); look = { ...look, ...patch }; if (msg) say(patch.skin ? $('skin-status') : $('layout-status'), msg, 'ok'); refresh(); }
-    catch (err) { say(patch.skin ? $('skin-status') : $('layout-status'), String(err), 'err'); refresh(); }
+    const st = 'skin' in patch || 'glass_hue' in patch ? $('skin-status') : $('layout-status');
+    try { await invoke('settings_set_look', { patch }); look = { ...look, ...patch }; if (msg) say(st, msg, 'ok'); refresh(); }
+    catch (err) { say(st, String(err), 'err'); refresh(); }
   }
-  const STYLE_MSG = { wheel: 'Saved. Songs turn on a wheel.', stack: 'Saved. Songs stack in a flat list.', coverflow: 'Saved. Songs line up in a row.', compact: 'Saved. Just the titles, small.' };
+  const STYLE_MSG = { wheel: 'Saved. Songs turn on a wheel.', stack: 'Saved. Songs stack in a flat list.', coverflow: 'Saved. Songs line up in a row.', compact: 'Saved. Just the titles, small.', orbit: 'Saved. Songs ring round your cursor.',
+    random: 'Saved. Songs float all over, the one in front is big.' };
   styleTiles.forEach(x => x.addEventListener('click', () => setLook({ style: x.dataset.style }, STYLE_MSG[x.dataset.style])));
   sizeKeys.forEach(x => x.addEventListener('click', () => setLook({ size: x.dataset.size }, 'Saved. ' + x.textContent + ' carousel.')));
   for (const id of ['depth-blur', 'depth-fade']) {
@@ -584,6 +845,127 @@
   $('open-history').addEventListener('click', () => invoke('open_history').catch(err => say($('status'), String(err), 'err')));
   $('skins-folder').addEventListener('click', () => invoke('open_skins_folder').catch(err => say($('skin-status'), String(err), 'err')));
   $('skins-guide').addEventListener('click', () => invoke('open_skins_guide').catch(err => say($('skin-status'), String(err), 'err')));
+
+  // ---- the Look and Skin panels: each opens from its button or shortcut and closes with Esc, its X or a
+  // click outside. One at a time: opening one closes the other. ----
+  const root = document.documentElement, panels = [];
+  let panelsChanged = () => {}; // the floating window's click area follows the panels (set further down)
+  function panel(sheet, opener, first) {
+    const P = { sheet, shutting: 0 };
+    let downOutside = false;
+    P.open = () => {
+      for (const o of panels) if (o !== P && o.sheet.open) { clearTimeout(o.shutting); o.shutting = 0; o.sheet.close(); }
+      clearTimeout(P.shutting); P.shutting = 0;
+      if (!sheet.open) {
+        root.classList.add('lock');
+        sheet.showModal();
+        // grow from the button: its centre (kept on screen) relative to the centred panel
+        const b = opener.getBoundingClientRect(), vw = root.clientWidth, vh = root.clientHeight;
+        const ox = Math.min(Math.max(b.left + b.width / 2, 0), vw) - (vw - sheet.offsetWidth) / 2;
+        const oy = Math.min(Math.max(b.top + b.height / 2, 0), vh) - (vh - sheet.offsetHeight) / 2;
+        sheet.style.transformOrigin = `${ox}px ${oy}px`;
+        void sheet.offsetWidth; // lay out the closed state first, so the class below transitions
+      }
+      sheet.classList.add('in');
+      (first() || sheet.querySelector('.x')).focus();
+      panelsChanged();
+    };
+    P.close = () => {
+      if (!sheet.open || P.shutting) return;
+      sheet.classList.remove('in');
+      P.shutting = setTimeout(() => { P.shutting = 0; sheet.close(); }, 230);
+    };
+    // when switching panels the other one is already open: it keeps the lock and the focus
+    sheet.addEventListener('close', () => {
+      clearTimeout(P.shutting); P.shutting = 0; sheet.classList.remove('in');
+      if (!panels.some(o => o.sheet.open)) { root.classList.remove('lock'); opener.focus(); }
+      panelsChanged();
+    });
+    sheet.addEventListener('cancel', e => { e.preventDefault(); P.close(); });
+    sheet.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); P.close(); return; }
+      if (e.key !== 'Tab') return;
+      // keep Tab inside the panel (controls hidden with their section don't count)
+      const f = [...sheet.querySelectorAll('button:not(:disabled), input:not(:disabled)')].filter(x => x.offsetParent), i = f.indexOf(document.activeElement);
+      if (e.shiftKey ? i <= 0 : i === f.length - 1) { e.preventDefault(); f[e.shiftKey ? f.length - 1 : 0].focus(); }
+    });
+    // a click on the dimmed page around the panel lands on the dialog itself
+    sheet.addEventListener('pointerdown', e => { downOutside = e.target === sheet; });
+    sheet.addEventListener('click', e => { if (e.target === sheet && downOutside) P.close(); });
+    opener.addEventListener('click', P.open);
+    sheet.querySelector('.x').addEventListener('click', P.close);
+    panels.push(P);
+    return P;
+  }
+  const lookPanel = $('look-panel'), skinPanel = $('skin-panel');
+  const SHORTCUT = {
+    l: panel(lookPanel, $('look-open'), () => lookPanel.querySelector('.tile[data-style][aria-checked="true"]')),
+    k: panel(skinPanel, $('skin-open'), () => skinPanel.querySelector('.skin[aria-checked="true"]:not(:disabled)') || skinPanel.querySelector('.skin:not(:disabled)')),
+  };
+  addEventListener('keydown', e => {
+    const P = e.ctrlKey && !e.altKey && !e.shiftKey && SHORTCUT[e.key.toLowerCase()];
+    const t = e.target, typing = t.isContentEditable || t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && t.type !== 'range');
+    if (!P || typing) return;
+    e.preventDefault();
+    if (!P.sheet.open || P.shutting) P.open();
+  });
+
+  // ---- the floating window: invisible, so it takes clicks only where a panel is (the app passes the rest
+  // through to the desktop), is dragged by its header, and brings its own minimize and close ----
+  if (root.classList.contains('float')) {
+    const scroller = document.body;
+    let queued = 0, sent = '', holding = false;
+    const report = () => { if (!queued) queued = requestAnimationFrame(sendPanels); };
+    panelsChanged = report;
+    function sendPanels() {
+      queued = 0;
+      const W = innerWidth, H = innerHeight, st = scroller.scrollTop, sh = scroller.scrollHeight, ch = scroller.clientHeight;
+      // fade the content out only at an edge where it is cut off
+      root.classList.toggle('cut-top', st > 0);
+      root.classList.toggle('cut-bottom', st + ch < sh - 1);
+      let rects;
+      // a panel is open (it is modal and closes on a click outside), or a press is under way (a slider drag
+      // may leave the panel): the whole window
+      if (holding || panels.some(o => o.sheet.open)) rects = [[0, 0, W, H]];
+      else {
+        rects = [];
+        for (const el of document.querySelectorAll('main > *')) {
+          const r = el.getBoundingClientRect(), x = Math.max(0, Math.floor(r.left)), y = Math.max(0, Math.floor(r.top));
+          const w = Math.min(W, Math.ceil(r.right)) - x, h = Math.min(H, Math.ceil(r.bottom)) - y;
+          if (w > 0 && h > 0) rects.push([x, y, w, h]);
+        }
+        if (sh > ch + 1) { // the scrollbar thumb
+          const th = Math.max(ch * ch / sh, 24), ty = st / (sh - ch) * (ch - th), x = scroller.clientWidth;
+          rects.push([x, Math.floor(ty), W - x, Math.ceil(th)]);
+        }
+      }
+      const key = JSON.stringify(rects);
+      if (key !== sent) { sent = key; invoke('settings_panels', { rects }).catch(() => {}); }
+    }
+    scroller.addEventListener('scroll', report, { passive: true });
+    addEventListener('resize', report);
+    const ro = new ResizeObserver(report);
+    ro.observe(document.querySelector('main'));
+    document.querySelectorAll('main > *').forEach(el => ro.observe(el));
+    $('adv').addEventListener('toggle', report);
+    document.addEventListener('animationend', report); // the panels' entrance moves them a little
+    // the header is the title bar; its buttons, links, inputs and the version chip are not
+    const header = document.querySelector('header');
+    const grabs = e => e.button === 0 && header.contains(e.target) && !e.target.closest('button, a, input, .ver');
+    addEventListener('pointerdown', e => { if (!grabs(e)) { holding = true; report(); } }, true);
+    const release = () => { if (holding) { holding = false; report(); } };
+    addEventListener('pointerup', release, true);
+    addEventListener('pointercancel', release, true);
+    addEventListener('pointermove', e => { if (!e.buttons) release(); }, { passive: true }); // a release we never saw
+    header.addEventListener('mousedown', e => {
+      if (!grabs(e) || e.detail > 1) return; // a double-click does nothing
+      e.preventDefault();
+      invoke('settings_window', { what: 'drag' }).catch(() => {});
+    });
+    $('win-min').addEventListener('click', () => invoke('settings_window', { what: 'minimize' }).catch(() => {}));
+    $('win-close').addEventListener('click', () => invoke('settings_window', { what: 'close' }).catch(() => {}));
+    report();
+  }
   if (T) {
     T.event.listen('lg-skins', e => { skinList = e.payload || []; renderSkins(); });
     T.event.listen('lg-look', e => { if (e.payload) showLook(e.payload); });

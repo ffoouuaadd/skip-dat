@@ -58,12 +58,55 @@ Everything is optional; anything you leave out keeps the default. Colours are CS
 | `cover.frame` | A frame around the album art, `frameStyle` `"solid"`, `"chrome"` or `"inset"`. |
 | `cover.tint` / `tintAmount` | Colours the album art (for an LCD look). |
 | `cover.pixelate` | Turns the album art into big pixels: how many across (for example `28`). `0` is off. |
-| `decoration` | Pictures the card in front wears (a hat, shoes, a sticker): one `{ … }` or a list of up to four. `width` in pixels; `x` and `y` move it from the middle of the card's top edge, or its bottom edge with `"anchor": "bottom"` (negative `y` is up). |
+| `decoration` | Pictures around the player: one `{ … }` or a list of up to eight. See **Decorations** below. |
+| `particles` | Small pictures drifting around the player (bubbles, sparks, snow). See **Particles** below. |
 | `button` / `chip` | The play buttons and the app names beside the carousel. |
 | `glass` | For glass skins: `frost` (how blurry the desktop behind looks, 0–2), a `tint` colour and how much. |
 | `shadow` | Shadow strength, 0–2. |
 
-Performance mode (Settings → Options) overrides a skin: no textures, gloss, blur or shadows.
+## Decorations
+
+```json
+"decoration": [
+  { "image": "shell.png", "anchor": "player", "width": 720, "behind": true },
+  { "image": "antenna.png", "anchor": "rail", "width": 60, "y": -70, "animation": "sway" },
+  { "image": "hat.png", "anchor": "top", "width": 132, "y": -30 },
+  { "image": "torch.png", "anchor": "bottom", "width": 50, "x": 118, "y": -46, "pixels": true, "animation": "flicker" }
+]
+```
+
+| Key | What it does |
+|---|---|
+| `image` | A PNG, JPEG, WebP or GIF in the skin's folder. An animated GIF, PNG or WebP plays; when Windows' "Show animations" is off it shows its first frame, held still, so make that frame look good on its own. |
+| `anchor` | Where it sits. `"top"` (the default) and `"bottom"`: the top or bottom edge of the card in front, and it moves with that card. These don't show in the Compact style, whose thin cards leave no room beside the song names. `"rail"`: the play/pause button. `"wheel"`: the middle of the wheel. `"player"`: halfway between the wheel and the buttons beside it, for a shell around the whole player; it shows with the vertical Wheel style only, since it's drawn for that shape. |
+| `width` | In pixels at the Medium size, up to 900. The height follows the picture. |
+| `x`, `y` | Move it from its anchor (negative `y` is up). For `"rail"` and `"player"`, a positive `x` points away from the cards, so it flips with the buttons when they move to the left of the wheel. |
+| `behind` | `true` draws it behind the cards (a shell, a glow). Behind glass cards it only shows around them. |
+| `animation` | `"bob"` (up and down), `"sway"` (rocks), `"spin"`, `"pulse"` (breathes), `"flicker"` (like a flame), `"twinkle"` (a star). Motion stops in performance mode and when Windows' "Show animations" is off. |
+| `speed` | How fast its animation runs, 0.1–4 (1 is normal; 0.3 makes a slow, calm spin). |
+| `pivot` | The point it sways, spins or breathes around, as `[x, y]` fractions of the picture: `[0.5, 1]` is the middle of its bottom edge, so an antenna sways from its base. The middle is the default. |
+| `restart` | `"song"` plays an animated GIF, PNG or WebP from its first frame whenever the song playing changes, so it can react to a skip (a bubble that pops, a door that slams). |
+| `opacity` | 0–1. |
+| `pixels` | `true` keeps pixel art sharp when it's scaled. |
+
+## Particles
+
+```json
+"particles": { "image": "bubble.png", "count": 12, "size": 16, "motion": "rise", "speed": 1, "spread": 260, "opacity": 0.8 }
+```
+
+| Key | What it does |
+|---|---|
+| `image` | One small picture used for every particle. |
+| `count` | 1–24. |
+| `size` | Width in pixels; each particle is a little bigger or smaller. |
+| `motion` | `"rise"` (bubbles), `"fall"` (snow, petals), `"drift"` (dust, fireflies), `"orbit"` (circling the player). |
+| `speed` | 0.1–4. |
+| `spread` | How far from the player's middle they go, in pixels. |
+| `behind` | `false` draws them over the cards; behind them is the default, so they never cover a title. |
+| `pixels` | `true` keeps pixel art sharp. |
+
+Performance mode (Settings → Options) overrides a skin: no textures, gloss, blur, shadows, decorations or particles.
 
 ## Tips
 

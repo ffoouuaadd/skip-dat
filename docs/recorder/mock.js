@@ -44,6 +44,8 @@
     sources: M.srcs.map(s => ({
       key: s.key, name: s.name, via: s.via || '', playing: s.playing, queue: 'full', can_jump: true, can_prev: true, can_next: true,
       shuffle: false, site: '', target: null,
+      // the song buttons that work for it, and whether the song playing is liked (view.rs)
+      acts: s.acts || ['like', 'link', 'next', 'spotify'], liked: s.liked === undefined ? null : s.liked,
       items: [...s.hist.slice(-4).map((x, i, a) => ({ ...x, rel: i - a.length })), { ...s.now, rel: 0 }, ...s.up.map((x, i) => ({ ...x, rel: i + 1 }))],
     })),
   });
@@ -61,6 +63,10 @@
     M.active = key;
     M.prev = before;
     M.back = { source: key, ...songOf(old) };
+    // the heart follows the new song: Spotify knows each song's like, a tab's like button resets
+    if (s.likes) s.liked = s.likes.includes(s.now.key);
+    else if (s.via && s.liked === true) s.liked = false;
+    s.pos = 0;
     M.history.unshift({ id: 'h' + M.history.length + 1, ...songOf(s.now), app: s.name, via: s.via || '', time: Math.floor(Date.now() / 1000) });
   }
   SD.cmd.get_view = () => SD.view();
@@ -89,6 +95,80 @@
       push();
     });
   };
+  // ---- volume, jumping within a song and the song buttons, with the app's own messages (extras.rs) ----
+  const toast = t => SD.emit('lg-toast', t);
+  const clock = s => Math.floor(Math.max(0, s) / 60) + ':' + String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0');
+  const isTab = s => !!s.via;                       // a browser tab, through the companion
+  const isSpot = s => /spotify/i.test(s.key) && !isTab(s);
+  const site = s => s.site || (/soundcloud/i.test(s.key) ? 'soundcloud' : /ytm|music/i.test(s.key) ? 'music.youtube.com' : 'youtube.com');
+  // where the song playing is (seconds), moving on while it plays
+  let posT = 0;
+  SD.onStep.push(t => { const dt = t - posT; posT = t; M.srcs.forEach(s => { if (s.playing && s.pos != null) s.pos = Math.min(s.pos + dt, (s.len || 225) - 1); }); });
+  const posOf = s => { if (s.pos == null) s.pos = 72; if (!s.len) s.len = 225; return s.pos; };
+  SD.cmd.set_volume = a => {
+    const s = SD.src(a.source); if (!s || !a.steps) return;
+    SD.later(80, () => {
+      if (isTab(s) && site(s) === 'soundcloud') return toast('SoundCloud’s volume only moves with its own slider');
+      s.vol = Math.min(1, Math.max(0, (s.vol == null ? 0.5 : s.vol) + a.steps * 0.05));
+      toast(`${s.name} volume ${Math.round(s.vol * 100)}%`);
+    });
+  };
+  SD.cmd.seek = a => {
+    const s = SD.src(a.source); if (!s || !a.secs) return;
+    SD.later(80, () => {
+      const dir = a.secs > 0 ? 'Forward' : 'Back';
+      if (isTab(s) && site(s) === 'soundcloud') return toast('SoundCloud jumps within a song only with its own bar');
+      s.pos = Math.min(Math.max(0, posOf(s) + a.secs), s.len - 1);
+      toast(isTab(s) ? `${dir} ${Math.abs(a.secs)} s` : `${dir} 10 s · ${clock(s.pos)} / ${clock(s.len)}`);
+    });
+  };
+  const unavailable = (s, what) => isSpot(s) && what !== 'spotify' ? 'Connect Spotify in Settings to use this'
+    : what === 'spotify' ? (isSpot(s) ? 'This is Spotify already' : 'Connect Spotify in Settings to continue there')
+    : what === 'next' ? 'Play next works for Spotify songs' : `${s.name} doesn’t share that with other apps`;
+  SD.cmd.song_action = a => {
+    const s = SD.src(a.source); if (!s) return;
+    SD.later(120, () => {
+      if (!(s.acts || ['like', 'link', 'next', 'spotify']).includes(a.what)) return toast(unavailable(s, a.what));
+      const all = [...s.hist.map((x, i) => [x, i - s.hist.length]), [s.now, 0], ...s.up.map((x, i) => [x, i + 1])];
+      const [it, rel] = all.find(([x]) => x.key === a.item) || [s.now, 0];
+      if (a.what === 'like') {
+        if (isTab(s)) {
+          if (rel !== 0) return toast('Only the song playing can be liked here');
+          if (s.liked === true) return toast(`${it.title} is already liked`);
+          if (s.liked == null) return toast(`${s.name} shows no like button for this`);
+          SD.later(500, () => { s.liked = true; push(); toast(`Liked on ${s.name}`); });
+          return;
+        }
+        s.likes = s.likes || (s.liked ? [s.now.key] : []);
+        if (s.likes.includes(it.key)) return toast(`${it.title} is already in your Liked Songs`);
+        s.likes.push(it.key); s.liked = s.likes.includes(s.now.key); push();
+        return toast(`Added ${it.title} to your Liked Songs`);
+      }
+      if (a.what === 'link') {
+        if (isTab(s) && rel !== 0) return toast('Only the song playing has a link here');
+        return toast('Link copied · ' + (isTab(s) ? site(s) : 'open.spotify.com'));
+      }
+      if (a.what === 'next') {
+        if (rel === 0) return toast('That’s the song playing');
+        if (rel === 1) return toast(`${it.title} is already up next`);
+        if (rel > 1) { s.up.splice(rel - 1, 1); s.up.unshift(it); push(); }
+        return toast(`${it.title} plays next`);
+      }
+      if (a.what === 'spotify') {
+        // finds the song on Spotify, starts it there at the same moment, then pauses this app
+        const now = s.now, from = posOf(s), sp = M.srcs.find(isSpot);
+        toast(`Looking for ${now.title} on Spotify…`);
+        SD.later(1400, () => {
+          if (!sp) return toast(`Couldn’t find ${now.title} on Spotify`);
+          if (sp.now.key !== 'sp:' + now.key) { sp.hist.push(sp.now); sp.now = { ...now, key: 'sp:' + now.key }; }
+          sp.pos = from; sp.len = s.len; sp.playing = true; s.playing = false; M.active = sp.key;
+          if (sp.likes) sp.liked = sp.likes.includes(sp.now.key);
+          push();
+          toast(`Playing on Spotify from ${clock(from)}`);
+        });
+      }
+    });
+  };
   SD.cmd.history_list = () => M.history;
   SD.cmd.history_play = a => { const h = M.history.find(x => x.id === a.id); if (h) SD.later(200, () => { SD.flyout && SD.flyout({ ...h, name: h.app }); }); };
   SD.cmd.history_clear = () => { M.history = []; };
@@ -96,7 +176,7 @@
   SD.settings = { trigger: 'alt', layout: 'vertical', pause_others: true, autostart: true, client_id: '3f6c0e2a9b7d4c1e8a5f2b6d9c0e7a14', spotify_connected: true };
   SD.skins = [];
   SD.cmd.settings_get = () => ({
-    ...SD.settings, look: SD.look, skins: SD.skins, redirect_uri: 'http://127.0.0.1:47231/spotify', version: '1.4.1',
+    ...SD.settings, look: SD.look, skins: SD.skins, redirect_uri: 'http://127.0.0.1:47231/spotify', version: '1.5.2',
     companion: { last_seen: 3, folder: 'C:\\Users\\you\\AppData\\Local\\Programs\\Skip Dat\\browser-companion', error: null, folder_exists: true },
     config_file: 'C:\\Users\\you\\AppData\\Roaming\\app.skipdat.desktop\\config.json',
   });

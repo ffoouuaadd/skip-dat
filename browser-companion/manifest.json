@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Skip Dat companion",
-  "version": "1.4.0",
+  "version": "1.5.2",
   "description": "Lets the Skip Dat app see the real queue of YouTube Music, YouTube and SoundCloud tabs and play any song in it.",
   "icons": {
     "16": "icons/16.png",

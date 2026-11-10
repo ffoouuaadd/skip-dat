@@ -1,0 +1,65 @@
+{
+  "name": "Bubble Gum",
+  "author": "Skip Dat",
+  "about": "8-bit candy arcade: a pixel gum-wrapper card and a gum bubble that puffs up behind it and goes POP, every time the song changes.",
+  "base": "panel",
+  "text": {
+    "font": "pixelify-bold.woff2",
+    "color": "#2A0F1E",
+    "soft": "#7A1E50",
+    "title": 20,
+    "artist": 14,
+    "weight": 700,
+    "shadow": "2px 2px 0 #FFD6E8"
+  },
+  "card": {
+    "radius": 6,
+    "scale": 1,
+    "top": "#F6A9CB",
+    "bottom": "#F6A9CB",
+    "edge": "#2A0F1E",
+    "edgeWidth": 3,
+    "bevel": 5,
+    "gloss": 0,
+    "highlight": "#FFD6E8",
+    "dark": "#C43A7C",
+    "texture": "wrapper.png",
+    "textureMode": "normal",
+    "textureMix": 1,
+    "texturePixels": true
+  },
+  "cover": {
+    "radius": 0,
+    "frame": 4,
+    "frameColor": "#2A0F1E",
+    "frameStyle": "solid"
+  },
+  "button": {
+    "top": "#F6A9CB",
+    "bottom": "#F27DB2",
+    "edge": "#2A0F1E",
+    "edgeWidth": 3,
+    "icon": "#2A0F1E",
+    "bevel": 3,
+    "gloss": 0,
+    "highlight": "#FFD6E8",
+    "dark": "#C43A7C"
+  },
+  "chip": {
+    "top": "#FFF0F6",
+    "bottom": "#FFD6E8",
+    "text": "#2A0F1E",
+    "highlight": "#FFFFFF",
+    "dark": "#E886B6",
+    "edge": "#2A0F1E",
+    "edgeWidth": 3,
+    "activeTop": "#F6A9CB",
+    "activeBottom": "#F27DB2",
+    "activeText": "#2A0F1E"
+  },
+  "decoration": [
+    { "image": "gum.png", "anchor": "top", "width": 160, "x": 0, "y": -35, "pixels": true, "restart": "song" }
+  ],
+  "particles": { "image": "sparkle.png", "count": 5, "size": 15, "motion": "drift", "speed": 0.4, "spread": 230, "opacity": 0.7, "pixels": true },
+  "shadow": 0.8
+}

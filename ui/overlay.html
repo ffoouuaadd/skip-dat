@@ -46,7 +46,10 @@
   body.perf .t, body.perf .chip, body.perf .note { text-shadow: none; }
   body.perf .deco { display: none; }
   body.perf .ctl { filter: none; }
-  .deco { position: absolute; left: 0; top: 0; transform-origin: 0 0; visibility: hidden; image-rendering: pixelated; pointer-events: none; }
+  .deco { position: absolute; left: 0; top: 0; transform-origin: 0 0; visibility: hidden; pointer-events: none; }
+  .deco.pixels { image-rendering: pixelated; }
+  /* a skin's pictures behind the cards: the player's shell, background particles */
+  #under { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
   /* "Back to …" under the play/pause button */
   .back { position: absolute; left: 0; top: 0; transform-origin: 0 0; visibility: hidden; display: flex; align-items: center; gap: 8px; width: 138px; height: 30px; color: var(--chip-ink); text-shadow: var(--text-shadow, 0 1px 2px var(--glow)); }
   .back img { width: 30px; height: 30px; border-radius: 7px; object-fit: cover; flex: none; box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
@@ -57,10 +60,13 @@
   body.perf .back { text-shadow: none; }
   body.perf .back img { box-shadow: none; }
   .note { position: absolute; left: 0; top: 0; margin: 0; transform-origin: 0 0; visibility: hidden; width: 136px; text-align: center;
-          font-size: 11.5px; font-weight: 500; line-height: 1.3; color: var(--ink); text-shadow: 0 1px 2px rgba(0, 0, 0, .4); }
+          font-size: 11.5px; font-weight: 500; line-height: 1.3; color: var(--ink); text-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+          /* at most two lines inside its frosted backing; a long word or address breaks too */
+          overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 </style>
 </head>
 <body>
+<div id="under" aria-hidden="true"></div>
 <canvas id="gl"></canvas>
 <div id="ui" aria-hidden="true"></div>
 <script src="overlay.js"></script>

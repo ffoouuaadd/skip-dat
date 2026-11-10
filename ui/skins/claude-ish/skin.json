@@ -1,0 +1,18 @@
+{
+  "name": "Claude-ish",
+  "author": "Skip Dat",
+  "about": "An unofficial fan skin: warm cream paper, a serif title, terracotta buttons and a spark that slowly turns while you browse.",
+  "base": "panel",
+  "text": { "family": "Georgia", "color": "#1f1e1d", "soft": "#5e584c", "title": 21, "artist": 15, "weight": 600, "shadow": "none" },
+  "card": { "radius": 22, "top": "#f7f4ed", "bottom": "#efece5", "edge": "#e0d6c6", "edgeWidth": 1, "bevel": 0, "gloss": 0,
+            "texture": "paper.jpg", "textureMode": "normal", "textureMix": 1 },
+  "cover": { "radius": 12, "frame": 0 },
+  "button": { "top": "#e38c6c", "bottom": "#d4714f", "edge": "#b4593a", "icon": "#1f1e1d", "gloss": 0.12, "bevel": 0 },
+  "chip": { "top": "#faf9f5", "bottom": "#f0ebe0", "text": "#3d3929", "edge": "#e0d6c6", "edgeWidth": 1,
+            "activeTop": "#e38c6c", "activeBottom": "#d4714f", "activeText": "#1f1e1d" },
+  "decoration": [
+    { "image": "spark.png", "anchor": "top", "width": 50, "x": 104, "y": 4, "animation": "spin", "speed": 0.35 }
+  ],
+  "particles": { "image": "mote.png", "count": 5, "size": 12, "motion": "drift", "speed": 0.3, "spread": 250, "opacity": 0.55 },
+  "shadow": 0.8
+}

@@ -1,0 +1,17 @@
+{
+  "name": "Quicksilver",
+  "author": "Skip Dat",
+  "about": "Polished chrome cards with a glowing aqua screen, liquid mercury that slowly gathers and drips over the top, and a tiny antenna with a pink beacon.",
+  "base": "panel",
+  "text": { "family": "Bahnschrift", "color": "#8ef6ff", "soft": "#5fd6e6", "title": 21, "artist": 15, "weight": 600, "glow": "rgba(40, 220, 255, 0.45)" },
+  "card": { "radius": 26, "scale": 1, "top": "#123f4e", "bottom": "#06202a", "edge": "#3d4a56", "edgeWidth": 1, "bevel": 2, "gloss": 0,
+            "highlight": "#ffffff", "dark": "#33404c", "texture": "card.webp", "textureMode": "normal", "textureMix": 1 },
+  "cover": { "radius": 14, "frame": 3, "frameColor": "#c9d4de", "frameStyle": "chrome" },
+  "button": { "top": "#c4f9ff", "bottom": "#1aa8c8", "edge": "#0b5466", "icon": "#03222b", "gloss": 0.6, "bevel": 2, "highlight": "#ffffff", "dark": "#06414f" },
+  "chip": { "top": "#f2f5f8", "bottom": "#a3aebb", "text": "#0d1a22", "edge": "#5d6976", "activeTop": "#F6A9CB", "activeBottom": "#F27DB2", "activeText": "#2A0F1E" },
+  "decoration": [
+    { "image": "antenna.webp", "anchor": "top", "width": 36, "x": 98, "y": -46, "animation": "sway", "speed": 0.5, "pivot": [0.5, 1] },
+    { "image": "mercury.webp", "anchor": "top", "width": 284, "x": 0, "y": 62 }
+  ],
+  "shadow": 1
+}

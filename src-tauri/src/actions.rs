@@ -33,6 +33,12 @@ pub enum Action {
     Replay { id: u64 },
     /// back to the song that was playing before the last skip or jump
     Back,
+    /// that app's own volume, `steps` notches up (positive) or down; extras.rs
+    Volume { source: String, steps: i32 },
+    /// jump `secs` within the song playing (back when negative); extras.rs
+    Seek { source: String, secs: i32 },
+    /// a song button: "like", "link", "next" or "spotify"; extras.rs
+    Song { source: String, item: String, what: String },
 }
 
 static TX: OnceLock<Sender<Action>> = OnceLock::new();
@@ -72,6 +78,16 @@ pub fn start(app: AppHandle) {
                     Action::Control { source, action } => control(&app, source.as_deref(), &action),
                     Action::Replay { id } => replay(&app, id),
                     Action::Back => go_back(&app),
+                    Action::Volume { source, steps } => {
+                        crate::extras::volume(&app, &source, steps);
+                        NOTHING
+                    }
+                    Action::Seek { source, secs } => {
+                        crate::extras::seek(&app, &source, secs);
+                        NOTHING
+                    }
+                    // "play next" and "continue on Spotify" change Spotify's queue: read it again
+                    Action::Song { source, item, what } => Outcome { spotify: crate::extras::song(&app, &source, &item, &what), ..NOTHING },
                 };
                 media::poke();
                 view::changed();

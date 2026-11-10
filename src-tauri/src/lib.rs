@@ -11,6 +11,8 @@ mod autostart;
 mod browser;
 mod classify;
 mod config;
+mod extras;
+mod float;
 mod history;
 mod hooks;
 mod media;
@@ -78,6 +80,24 @@ fn media_control(source: Option<String>, action: String) {
 #[tauri::command]
 fn go_back() {
     actions::send(actions::Action::Back);
+}
+
+/// Scroll over the play/pause button: that app's own volume, `steps` notches (up is positive).
+#[tauri::command]
+fn set_volume(source: String, steps: i32) {
+    actions::send(actions::Action::Volume { source, steps });
+}
+
+/// Scroll over the song playing: jump `secs` within it (back when negative).
+#[tauri::command]
+fn seek(source: String, secs: i32) {
+    actions::send(actions::Action::Seek { source, secs });
+}
+
+/// The song buttons under play/pause: "like", "link", "next", "spotify".
+#[tauri::command]
+fn song_action(source: String, item: String, what: String) {
+    actions::send(actions::Action::Song { source, item, what });
 }
 
 #[tauri::command]
@@ -157,11 +177,12 @@ pub struct Look {
     depth_fade: f64,
     perf: bool,
     skin: skins::Skin,
+    glass_hue: Option<f64>,
 }
 
 pub(crate) fn look_of(state: &AppState) -> Look {
     let c = state.cfg.guard().clone();
-    Look { style: c.style, layout: c.layout, size: c.size, depth_blur: c.depth_blur, depth_fade: c.depth_fade, perf: c.perf, skin: skins::get(&c.skin) }
+    Look { style: c.style, layout: c.layout, size: c.size, depth_blur: c.depth_blur, depth_fade: c.depth_fade, perf: c.perf, skin: skins::get(&c.skin), glass_hue: c.glass_hue }
 }
 
 /// Liquid glass shows the desktop through the cards, so the overlay photographs it when it
@@ -184,13 +205,13 @@ fn get_look(state: tauri::State<'_, AppState>) -> Look {
     look_of(&state)
 }
 
-/// Change any of: style, layout, size, depth_blur, depth_fade, perf, skin.
+/// Change any of: style, layout, size, depth_blur, depth_fade, perf, skin, glass_hue (null: the skin's own colour).
 #[tauri::command]
 fn settings_set_look(app: AppHandle, state: tauri::State<'_, AppState>, patch: serde_json::Value) -> Result<(), String> {
     {
         let mut c = state.cfg.guard();
         if let Some(v) = patch["style"].as_str() {
-            if !["wheel", "stack", "coverflow", "orbit", "compact"].contains(&v) {
+            if !["wheel", "stack", "coverflow", "orbit", "compact", "random"].contains(&v) {
                 return Err("Unknown style".into());
             }
             c.style = v.into();
@@ -209,6 +230,9 @@ fn settings_set_look(app: AppHandle, state: tauri::State<'_, AppState>, patch: s
         }
         if let Some(v) = patch["depth_blur"].as_f64() {
             c.depth_blur = v.clamp(0.0, 1.0);
+        }
+        if patch.get("glass_hue").is_some() {
+            c.glass_hue = patch["glass_hue"].as_f64().filter(|h| h.is_finite()).map(|h| h.rem_euclid(360.0));
         }
         if let Some(v) = patch["depth_fade"].as_f64() {
             c.depth_fade = v.clamp(0.0, 1.0);
@@ -429,22 +453,43 @@ fn open_settings(app: &AppHandle) {
         let _ = w.set_focus();
         return;
     }
-    let mut b = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
+    // The window itself is invisible (no frame, no background): only the page's glass panels
+    // show, floating over the desktop. The page draws its own drag bar and buttons (`settings_window`)
+    // and says where its panels are, so clicks between them reach what's behind (float.rs).
+    let built = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Skip Dat")
         .inner_size(600.0, 820.0)
         .min_inner_size(460.0, 560.0)
         .resizable(true)
+        .maximizable(false)
+        .decorations(false)
+        .transparent(true)
+        .shadow(false)
         .theme(Some(tauri::Theme::Dark))
-        .center();
-    // Windows 11: the window gets Mica, Windows' own frosted glass behind the page (drawn by
-    // Windows, free for us). Earlier Windows keep the page's own opaque background.
-    if windows_build() >= 22000 {
-        b = b
-            .transparent(true)
-            .effects(tauri::window::EffectsBuilder::new().effect(tauri::window::Effect::Mica).build())
-            .initialization_script("window.__SKIPDAT_MICA = true;");
+        .center()
+        .initialization_script("window.__SKIPDAT_FLOAT = true;")
+        .build();
+    if built.is_ok() {
+        float::watch(app.clone());
     }
-    let _ = b.build();
+}
+
+/// Where the Settings page's panels are (CSS px from the window's corner); clicks elsewhere go through.
+#[tauri::command]
+fn settings_panels(rects: Vec<[f64; 4]>) {
+    float::set_panels(rects);
+}
+
+/// The Settings page's own window buttons: "drag" (from its top bar), "minimize", "close".
+#[tauri::command]
+fn settings_window(window: tauri::WebviewWindow, what: String) -> Result<(), String> {
+    match what.as_str() {
+        "drag" => window.start_dragging(),
+        "minimize" => window.minimize(),
+        "close" => window.close(),
+        _ => return Err("Unknown window action".into()),
+    }
+    .map_err(|e| e.to_string())
 }
 
 /// Album art for the windows: `skipart://localhost/<id>` (content-addressed, so cached forever).
@@ -561,9 +606,14 @@ pub fn run() {
             choose,
             media_control,
             go_back,
+            set_volume,
+            seek,
+            song_action,
             overlay_done,
             set_hit_rects,
             settings_get,
+            settings_panels,
+            settings_window,
             settings_set_trigger,
             settings_set_layout,
             settings_set_pause_others,

@@ -18,7 +18,7 @@ use crate::AppState;
 use crate::util::Lock;
 
 pub const REDIRECT: &str = "http://127.0.0.1:8898/callback";
-const SCOPES: &str = "user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-recently-played";
+const SCOPES: &str = "user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-recently-played user-library-read user-library-modify";
 const API: &str = "https://api.spotify.com";
 
 fn now_secs() -> u64 {
@@ -215,6 +215,90 @@ pub fn find_track(app: &AppHandle, title: &str, artist: &str) -> Option<String> 
     let q = enc(&format!("{title} {artist}"));
     let v = get(app, &format!("/v1/search?type=track&limit=1&q={q}")).ok()?;
     v["tracks"]["items"][0]["uri"].as_str().map(String::from)
+}
+
+// ---------- Liked Songs (the library endpoints since February 2026: Spotify URIs, max 40) ----------
+
+/// Is this song (a Spotify URI) in your Liked Songs?
+pub fn library_contains(app: &AppHandle, uri: &str) -> Result<bool, String> {
+    let v = get(app, &format!("/v1/me/library/contains?uris={}", enc(uri)))?;
+    v.get(0).and_then(|b| b.as_bool()).ok_or_else(|| "Spotify gave no answer".to_string())
+}
+
+/// Adds the song to your Liked Songs. Saving never removes anything.
+pub fn library_save(app: &AppHandle, uri: &str) -> Result<(), String> {
+    send(app, "PUT", &format!("/v1/me/library?uris={}", enc(uri)), None)
+}
+
+// ---------- playing on this PC ----------
+
+/// This PC's Spotify app as a playback device: the one named like the PC, else any computer.
+fn this_pc_device(app: &AppHandle) -> Option<String> {
+    let v = get(app, "/v1/me/player/devices").ok()?;
+    let devs = v["devices"].as_array()?;
+    let host = std::env::var("COMPUTERNAME").unwrap_or_default().to_lowercase();
+    let pick = devs
+        .iter()
+        .find(|d| d["type"] == "Computer" && d["name"].as_str().is_some_and(|n| n.to_lowercase() == host))
+        .or_else(|| devs.iter().find(|d| d["type"] == "Computer"))
+        .or_else(|| devs.first())?;
+    pick["id"].as_str().map(String::from)
+}
+
+/// A player command. When Spotify has no active device (it played nothing for a while), it is
+/// sent again to this PC's Spotify app, which is opened first if it isn't running.
+pub fn player(app: &AppHandle, method: &str, path: &str, body: Option<Value>) -> Result<(), String> {
+    match send(app, method, path, body.clone()) {
+        Err(e) if e.contains("NO_ACTIVE_DEVICE") => {
+            let mut dev = this_pc_device(app);
+            if dev.is_none() {
+                let _ = open::that("spotify:");
+                for _ in 0..20 {
+                    std::thread::sleep(Duration::from_millis(500));
+                    dev = this_pc_device(app);
+                    if dev.is_some() {
+                        break;
+                    }
+                }
+            }
+            let dev = dev.ok_or(e)?;
+            let sep = if path.contains('?') { '&' } else { '?' };
+            send(app, method, &format!("{path}{sep}device_id={}", enc(&dev)), body)
+        }
+        r => r,
+    }
+}
+
+/// Waits (up to `ms`) until Spotify reports it is playing this URI.
+pub fn playing_uri(app: &AppHandle, uri: &str, ms: u64) -> bool {
+    let t0 = Instant::now();
+    while t0.elapsed() < Duration::from_millis(ms) {
+        if let Ok(v) = get(app, "/v1/me/player") {
+            if v["is_playing"].as_bool() == Some(true) && v["item"]["uri"].as_str() == Some(uri) {
+                return true;
+            }
+        }
+        std::thread::sleep(Duration::from_millis(300));
+    }
+    false
+}
+
+/// The Spotify song that really is this one from another app: same title (after cleaning
+/// YouTube extras) and an artist in common. None rather than a wrong song.
+pub fn search_track(app: &AppHandle, title: &str, artist: &str) -> Option<String> {
+    let (t, a) = crate::extras::clean_song(title, artist);
+    let tries = if a.is_empty() { vec![t.clone()] } else { vec![format!("track:{t} artist:{a}"), format!("{t} {a}")] };
+    for q in tries {
+        let Ok(v) = get(app, &format!("/v1/search?type=track&limit=10&q={}", enc(&q))) else { continue };
+        for it in v["tracks"]["items"].as_array().into_iter().flatten() {
+            let name = it["name"].as_str().unwrap_or("");
+            let artists: Vec<&str> = it["artists"].as_array().into_iter().flatten().filter_map(|x| x["name"].as_str()).collect();
+            if crate::extras::same_song(name, &artists, &t, &a) {
+                return it["uri"].as_str().map(String::from);
+            }
+        }
+    }
+    None
 }
 
 /// Title, artist line, art URL and URI for a track or podcast episode object.

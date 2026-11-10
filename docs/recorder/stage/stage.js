@@ -35,6 +35,12 @@
   .sd-win .tb .sp { flex: 1; }
   .sd-win .tb span.b { width: 44px; height: 32px; display: grid; place-items: center; font-size: 13px; opacity: .8; }
   .sd-win iframe { border: 0; display: block; width: 100%; height: calc(100% - 32px); background: #0B1018; }
+  /* the real pointer (driven by the recorder) reaches the windows through the overlay, which takes no clicks itself */
+  html, body, #gl { pointer-events: none; }
+  .sd-win { pointer-events: auto; }
+  /* Settings on Windows floats: no frame or background, only its glass panels (the page draws its own buttons) */
+  .sd-win.float { background: transparent; box-shadow: none; border-radius: 0; overflow: visible; }
+  .sd-win.float iframe { height: 100%; background: transparent; color-scheme: dark; }
   .sd-cap { position: absolute; left: 16px; top: 14px; display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 12px; border-radius: 16px;
     background: linear-gradient(180deg, rgba(30, 24, 48, .78), rgba(18, 14, 30, .82)); backdrop-filter: blur(18px); box-shadow: 0 8px 26px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.12); }
   .sd-cap .badge { min-width: 26px; height: 26px; padding: 0 7px; box-sizing: border-box; border-radius: 13px; background: #F27DB2; color: #2A0F1E; font: 800 13px/26px "Segoe UI"; text-align: center; flex: none; }
@@ -77,7 +83,7 @@
   fly.style.opacity = 0;
   let flyKey = null;
   SD.flyout = (song, tag) => {
-    const key = song.title + '|' + song.artist;
+    const key = song.title + '|' + song.artist + '|' + (song.name || '');
     if (key === flyKey && !tag) return;
     flyKey = key;
     const shown = fly.style.opacity !== '0';
@@ -108,10 +114,12 @@
 
   // ---- windows ----
   const wins = {};
-  SD.openWindow = (kind, x, y, w, h) => {
+  // opt.float: a frameless, see-through window like Settings on Windows (the page gets __SKIPDAT_FLOAT)
+  SD.openWindow = (kind, x, y, w, h, opt = {}) => {
     if (wins[kind]) return wins[kind];
-    const win = el('div', 'sd-win', `<div class="tb"><img src="/media/icon.png" alt=""><span>${kind === 'history' ? 'What was I playing?' : 'Skip Dat'}</span><span class="sp"></span><span class="b">&#8211;</span><span class="b">&#9633;</span><span class="b">&#10005;</span></div>`, desk);
+    const win = el('div', 'sd-win' + (opt.float ? ' float' : ''), opt.float ? '' : `<div class="tb"><img src="/media/icon.png" alt=""><span>${kind === 'history' ? 'What was I playing?' : 'Skip Dat'}</span><span class="sp"></span><span class="b">&#8211;</span><span class="b">&#9633;</span><span class="b">&#10005;</span></div>`, desk);
     Object.assign(win.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px', opacity: 0 });
+    SD.floatNext = !!opt.float;
     const fr = el('iframe', null, null, win); fr.src = '/ui/' + kind + '.html';
     wins[kind] = { win, fr };
     anim(0.28, k => { const e = ease(k); win.style.opacity = e; win.style.transform = `scale(${0.94 + 0.06 * e})`; });
@@ -119,6 +127,68 @@
   };
   SD.closeWindow = kind => { const w = wins[kind]; if (!w) return; delete wins[kind]; anim(0.2, k => { w.win.style.opacity = 1 - ease(k); w.win.style.transform = `scale(${1 - 0.04 * ease(k)})`; if (k >= 1) w.win.remove(); }); };
   SD.openHistory = () => SD.openWindow('history', 250, 46, 470, 500);
+  // the floating Settings' own minimize and close buttons
+  SD.cmd.settings_window = a => { if (a.what === 'close' || a.what === 'minimize') SD.closeWindow('settings'); };
+
+  // ---- animated pictures (a skin's torch, drip, bubble) on the virtual clock ----
+  // The browser plays an animated PNG or WebP in real time, which the recorder doesn't keep. So each one is
+  // decoded once into its frames, and a decoration shows them one by one by the recorder's clock.
+  const SRC = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+  const plain = u => String(u).replace(/[?&]play=\d+$/, '');
+  const ready = new Map(), loading = new Map();       // url -> { frames, ends, total, plays } or null (a still picture)
+  function decode(url) {
+    if (!loading.has(url)) loading.set(url, (async () => {
+      try {
+        if (!window.ImageDecoder) return null;
+        const r = await fetch(url), type = (r.headers.get('content-type') || '').split(';')[0];
+        if (!/^image\/(png|webp|gif)$/.test(type)) return null;
+        const dec = new ImageDecoder({ data: await r.arrayBuffer(), type });
+        await dec.tracks.ready; await dec.completed;
+        const tr = dec.tracks.selectedTrack;
+        if (!tr || tr.frameCount < 2) return null;
+        const frames = [], ends = []; let t = 0;
+        for (let i = 0; i < tr.frameCount; i++) {
+          const { image } = await dec.decode({ frameIndex: i });
+          const c = new OffscreenCanvas(image.displayWidth, image.displayHeight);
+          c.getContext('2d').drawImage(image, 0, 0);
+          t += (image.duration || 100000) / 1000; ends.push(t); image.close();
+          frames.push(URL.createObjectURL(await c.convertToBlob()));
+        }
+        return { frames, ends, total: t, plays: tr.repetitionCount === Infinity ? Infinity : tr.repetitionCount + 1 };
+      } catch (e) { console.warn('[stage] animated picture', url, String(e)); return null; }
+    })().then(a => { ready.set(url, a); return a; }));
+    return loading.get(url);
+  }
+  SD.preloadPictures = urls => Promise.all(urls.map(decode));
+  // where a looping picture starts when a skin is chosen, by file name (ms into its loop), as if it had
+  // been on screen a while; a replay on a song change ("restart") always starts at the top
+  SD.phase = {};
+  const decoImgs = [...document.querySelectorAll('#ui img.deco, #under img.deco')];
+  decoImgs.forEach(img => Object.defineProperty(img, 'src', {
+    configurable: true,
+    get() { return img.__want != null ? img.__want : SRC.get.call(img); },
+    set(v) {
+      const ph = /[?&]play=/.test(v) ? 0 : (Object.entries(SD.phase).find(([k]) => String(v).includes(k)) || [0, 0])[1];
+      img.__want = String(v); img.__t0 = SD.T() - ph; img.__k = -1;
+      const a = ready.get(plain(v));
+      if (a === undefined) decode(plain(v));
+      if (!a) SRC.set.call(img, v);
+    },
+  }));
+  const decoding = [];
+  SD.onStep.push(() => {
+    for (const img of decoImgs) {
+      if (img.__want == null) continue;
+      if (!img.hasAttribute('src')) { img.__want = null; continue; }   // the overlay took it away
+      const a = ready.get(plain(img.__want));
+      if (!a) continue;
+      const e = SD.T() - img.__t0, done = e >= a.total * a.plays;
+      const k = done ? a.frames.length - 1 : a.ends.findIndex(x => e % a.total < x);
+      if (k !== img.__k) { img.__k = k; SRC.set.call(img, a.frames[k]); decoding.push(img.decode().catch(() => {})); }
+    }
+  });
+  // the recorder waits for the frames just shown before it takes a picture
+  SD.settle = () => (decoding.length ? Promise.all(decoding.splice(0)) : null);
 
   // ---- caption ----
   let cap = null;

@@ -4,254 +4,482 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Skip Dat</title>
-<meta name="description" content="Hold Alt and scroll anywhere in Windows: a glass wheel of every music app's queue pops out of your cursor. Version 1.4.1.">
+<meta name="description" content="Hold Alt and scroll anywhere in Windows: a glass wheel of every music app's queue pops out of your cursor. Version 1.5.2.">
+<meta name="theme-color" content="#0b0d13">
 <link rel="icon" href="media/icon.png">
 <style>
   :root {
-    --bg: #f6f7fb; --fg: #161a24; --soft: #545c6e; --line: #dfe3ec; --card: #ffffff; --accent: #e0559a; --accent-ink: #fff;
-    --kbd: #eef0f6; --kbd-line: #c9cfdc; --new: #0f8a6a; --new-bg: #d8f6ec; --code: #eef0f6;
+    --bg: #0b0d13; --bg2: #10131c; --fg: #eef1f7; --soft: #a6aec0; --faint: #7d8598;
+    --line: rgba(255, 255, 255, .09); --card: rgba(255, 255, 255, .045); --card-hi: rgba(255, 255, 255, .08);
+    --accent: #f27db2; --accent2: #f6a9cb; --accent-ink: #2a0f1e; --glow: rgba(242, 125, 178, .28);
+    --kbd: #1b2030; --kbd-line: #343c50; --code: #161b27; --new: #8ef5c8; --new-bg: rgba(142, 245, 200, .12);
+    --shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 20px 50px -24px rgba(0, 0, 0, .8);
+    color-scheme: dark;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #0d1017; --fg: #eef1f7; --soft: #a3abbd; --line: #252b38; --card: #151a24; --accent: #f27db2; --accent-ink: #2a0f1e;
-      --kbd: #1d2330; --kbd-line: #343c4e; --new: #8ef5c8; --new-bg: #10332a; --code: #1a202c;
+  :root[data-theme="light"] {
+    --bg: #f5f6fa; --bg2: #ffffff; --fg: #151924; --soft: #535b6d; --faint: #6b7385;
+    --line: rgba(20, 25, 40, .1); --card: rgba(255, 255, 255, .8); --card-hi: #ffffff;
+    --accent: #d2468a; --accent2: #e0559a; --accent-ink: #ffffff; --glow: rgba(224, 85, 154, .18);
+    --kbd: #eef0f6; --kbd-line: #c9cfdc; --code: #eef0f6; --new: #0d7a5d; --new-bg: #d8f6ec;
+    --shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 18px 40px -26px rgba(20, 25, 40, .35);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5f6fa; --bg2: #ffffff; --fg: #151924; --soft: #535b6d; --faint: #6b7385;
+      --line: rgba(20, 25, 40, .1); --card: rgba(255, 255, 255, .8); --card-hi: #ffffff;
+      --accent: #d2468a; --accent2: #e0559a; --accent-ink: #ffffff; --glow: rgba(224, 85, 154, .18);
+      --kbd: #eef0f6; --kbd-line: #c9cfdc; --code: #eef0f6; --new: #0d7a5d; --new-bg: #d8f6ec;
+      --shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 18px 40px -26px rgba(20, 25, 40, .35);
+      color-scheme: light;
     }
   }
-  :root[data-theme="dark"] {
-    --bg: #0d1017; --fg: #eef1f7; --soft: #a3abbd; --line: #252b38; --card: #151a24; --accent: #f27db2; --accent-ink: #2a0f1e;
-    --kbd: #1d2330; --kbd-line: #343c4e; --new: #8ef5c8; --new-bg: #10332a; --code: #1a202c;
-  }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 "Segoe UI", system-ui, -apple-system, sans-serif; }
-  main { max-width: 900px; margin: 0 auto; padding: 32px 16px 64px; }
-  a { color: var(--accent); }
-  h1 { font-size: 44px; line-height: 1.1; margin: 10px 0 6px; letter-spacing: -.02em; }
-  h2 { font-size: 28px; margin: 56px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); letter-spacing: -.01em; }
-  h3 { font-size: 20px; margin: 36px 0 10px; }
-  p, li { color: var(--fg); }
-  .soft { color: var(--soft); }
-  .hero { text-align: center; }
-  .hero .tag { font-size: 20px; font-weight: 650; margin: 0 0 8px; }
-  .hero p { margin: 4px 0; }
-  .dl { display: inline-block; margin: 20px 0 6px; }
-  .dl img { width: 340px; max-width: 100%; display: block; }
-  .meta { font-size: 13px; color: var(--soft); }
-  .gif { width: 100%; height: auto; display: block; border-radius: 14px; margin: 14px 0; border: 1px solid var(--line); background: var(--card); }
-  .badge { display: inline-block; vertical-align: middle; font-size: 12px; font-weight: 800; letter-spacing: .06em; padding: 2px 9px; border-radius: 999px; background: var(--new-bg); color: var(--new); margin-left: 8px; }
-  kbd { font: 600 13px "Segoe UI", system-ui, sans-serif; padding: 2px 7px; border-radius: 6px; background: var(--kbd); border: 1px solid var(--kbd-line); border-bottom-width: 2px; }
-  code { font: 14px Consolas, ui-monospace, monospace; background: var(--code); padding: 1px 6px; border-radius: 5px; }
-  pre { background: var(--code); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font: 13px/1.5 Consolas, ui-monospace, monospace; }
+  html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; }
+  body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background: radial-gradient(900px 520px at 50% -120px, var(--glow), transparent 70%), radial-gradient(700px 500px at 100% 40%, rgba(120, 140, 255, .07), transparent 70%); }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:hover { color: var(--accent2); }
+  img { max-width: 100%; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+
+  /* top bar */
+  .top { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);
+    background: color-mix(in srgb, var(--bg) 78%, transparent); border-bottom: 1px solid var(--line); }
+  .top .wrap { display: flex; align-items: center; gap: 18px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--fg); text-decoration: none; white-space: nowrap; }
+  .brand img { width: 30px; height: 30px; }
+  .nav { display: flex; gap: 4px; margin-left: auto; overflow-x: auto; scrollbar-width: none; }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav a { color: var(--soft); text-decoration: none; font-size: 14px; font-weight: 600; padding: 6px 10px; border-radius: 8px; white-space: nowrap; }
+  .nav a:hover { color: var(--fg); background: var(--card); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; font: 700 14px "Segoe UI", system-ui, sans-serif; text-decoration: none; border-radius: 999px; padding: 8px 16px; white-space: nowrap; border: 0; cursor: pointer; }
+  .btn.pink { background: linear-gradient(180deg, var(--accent2), var(--accent)); color: var(--accent-ink); box-shadow: 0 6px 20px -8px var(--accent); }
+  .btn.pink:hover { color: var(--accent-ink); filter: brightness(1.05); }
+  .btn.ghost { background: var(--card); color: var(--fg); border: 1px solid var(--line); }
+  .theme { width: 36px; height: 36px; padding: 0; justify-content: center; }
+  .theme svg { width: 18px; height: 18px; fill: currentColor; }
+  @media (max-width: 760px) { .nav { display: none; } .top .btn.pink { margin-left: auto; } }
+
+  /* hero */
+  .hero { text-align: center; padding: 56px 0 24px; }
+  .hero .icon { width: 108px; height: 108px; filter: drop-shadow(0 14px 30px var(--glow)); }
+  .hero h1 { font: 800 clamp(40px, 7vw, 64px)/1.02 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; letter-spacing: -.03em; margin: 14px 0 10px; }
+  .hero .tag { font-size: clamp(18px, 2.6vw, 22px); font-weight: 650; margin: 0 0 10px; }
+  .hero .lede { color: var(--soft); margin: 0 auto; max-width: 620px; }
+  .hero .dl { display: inline-block; margin: 26px 0 8px; transition: transform .2s; }
+  .hero .dl:hover { transform: translateY(-2px); }
+  .hero .dl img { width: 340px; display: block; }
+  .meta { font-size: 13px; color: var(--faint); }
+  .meta a { color: var(--soft); }
+  .apps { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 18px 0 0; padding: 0; list-style: none; }
+  .apps li { font-size: 13px; font-weight: 650; color: var(--soft); border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 4px 12px; }
+
+  /* GIF frames */
+  .shot { position: relative; border-radius: 18px; padding: 6px; background: linear-gradient(160deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .02) 40%, rgba(255, 255, 255, .06)); box-shadow: var(--shadow); }
+  .shot img { display: block; width: 100%; height: auto; aspect-ratio: 1000 / 625; border-radius: 13px; background: #000; }
+  .hero .shot { margin: 36px auto 0; max-width: 980px; box-shadow: var(--shadow), 0 40px 120px -40px var(--glow); }
+
+  /* sections */
+  section { padding: 34px 0 10px; }
+  .kicker { display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+  h2 { font: 800 clamp(28px, 4vw, 38px)/1.15 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; letter-spacing: -.02em; margin: 0 0 10px; }
+  h2 + .sub { color: var(--soft); margin: 0 0 26px; max-width: 720px; }
+  h3 { font-size: 21px; line-height: 1.25; margin: 0 0 8px; letter-spacing: -.01em; }
+  .badge { display: inline-block; vertical-align: 3px; font-size: 11px; font-weight: 800; letter-spacing: .08em; padding: 2px 8px; border-radius: 999px; background: var(--new-bg); color: var(--new); margin-left: 6px; }
+  .hr { height: 1px; background: var(--line); margin: 30px 0 0; border: 0; }
+
+  /* feature rows: picture and words side by side */
+  .feat { display: grid; grid-template-columns: 1.55fr 1fr; gap: 30px; align-items: center; margin: 0 0 44px; }
+  .feat:nth-of-type(even) { grid-template-columns: 1fr 1.55fr; }
+  .feat:nth-of-type(even) .shot { order: 2; }
+  .feat p, .feat li { color: var(--soft); }
+  .feat p b, .feat li b { color: var(--fg); }
+  .feat ul { padding-left: 20px; margin: 8px 0 0; }
+  .feat li { margin: 4px 0; }
+  @media (max-width: 860px) { .feat, .feat:nth-of-type(even) { grid-template-columns: 1fr; gap: 16px; } .feat:nth-of-type(even) .shot { order: 0; } }
+  .note { border: 1px solid var(--line); background: var(--card); border-radius: 14px; padding: 14px 18px; color: var(--soft); }
+  .note b { color: var(--fg); }
+
+  /* steps */
+  .step { display: grid; grid-template-columns: 52px 1fr; gap: 0 18px; margin: 0 0 42px; }
+  .step .n { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; color: var(--accent-ink); background: linear-gradient(180deg, var(--accent2), var(--accent)); box-shadow: 0 8px 20px -10px var(--accent); }
+  .step .shot { margin: 12px 0 14px; }
+  .step p, .step li { color: var(--soft); }
+  .step p b, .step li b, .step td b { color: var(--fg); }
+  @media (max-width: 600px) { .step { grid-template-columns: 1fr; } .step .n { margin-bottom: 10px; } }
+
+  kbd { font: 650 12.5px "Segoe UI", system-ui, sans-serif; padding: 2px 7px; border-radius: 6px; background: var(--kbd); border: 1px solid var(--kbd-line); border-bottom-width: 2px; color: var(--fg); white-space: nowrap; }
+  code { font: 13.5px Consolas, ui-monospace, monospace; background: var(--code); padding: 1px 6px; border-radius: 5px; color: var(--fg); }
+  pre { background: var(--code); padding: 14px 16px; border-radius: 12px; overflow-x: auto; font: 12.5px/1.55 Consolas, ui-monospace, monospace; border: 1px solid var(--line); }
   pre code { background: none; padding: 0; }
-  .tbl { overflow-x: auto; margin: 12px 0; }
-  table { border-collapse: collapse; width: 100%; font-size: 15px; }
-  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
-  th { background: var(--card); }
+  .tbl { overflow-x: auto; margin: 12px 0; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { padding: 10px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  th { color: var(--fg); font-weight: 700; background: var(--card-hi); }
+  td { color: var(--soft); }
   td.c, th.c { text-align: center; }
-  details { margin: 12px 0; }
-  summary { cursor: pointer; font-weight: 650; }
-  .credits { font-size: 14px; color: var(--soft); }
-  .credits li { color: var(--soft); }
-  .theme { position: fixed; top: 12px; right: 12px; border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px; padding: 6px 12px; font: 600 13px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
-  @media (max-width: 600px) { h1 { font-size: 34px; } h2 { font-size: 24px; } .theme { display: none; } }
+  details { margin: 14px 0; border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 10px 16px; }
+  summary { cursor: pointer; font-weight: 700; }
+  details[open] summary { margin-bottom: 8px; }
+
+  /* skins grid */
+  .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 18px 0 8px; }
+  .skin { border: 1px solid var(--line); background: var(--card); border-radius: 16px; padding: 14px; display: grid; grid-template-columns: 46px 1fr; gap: 12px; align-items: start; }
+  .sw { width: 46px; height: 58px; border-radius: 10px; box-shadow: 0 1px 0 rgba(255, 255, 255, .25) inset, 0 6px 14px -8px rgba(0, 0, 0, .8); position: relative; overflow: hidden; }
+  .sw::after { content: ""; position: absolute; left: 7px; right: 7px; top: 7px; height: 26px; border-radius: 6px; background: rgba(255, 255, 255, .28); }
+  .skin b { color: var(--fg); }
+  .skin span:not(.badge) { display: block; margin-top: 2px; font-size: 14px; color: var(--soft); line-height: 1.45; }
+  .sw.glass { background: linear-gradient(160deg, rgba(255, 255, 255, .5), rgba(160, 190, 230, .25)); border: 1px solid rgba(255, 255, 255, .5); }
+  .sw.lime { background: linear-gradient(180deg, #b8f04a, #6cc61f); }
+  .sw.lcd { background: linear-gradient(180deg, #0c1a10, #04110a); border: 1px solid #2f8a4e; }
+  .sw.lcd::after { background: #7dfc9e55; }
+  .sw.chrome { background: linear-gradient(100deg, #8a929e, #eef1f5 40%, #9aa1ac 60%, #dfe3e8); }
+  .sw.pixel { background: #3b3f46; border: 3px solid #111; border-radius: 4px; }
+  .sw.pixel::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 8px; background: #4caf50; z-index: 1; }
+  .sw.qs { background: linear-gradient(180deg, #0d3a3f, #08262b); border: 3px solid #cfd8dc; }
+  .sw.qs::after { background: #8ef6ff33; }
+  .sw.bk { background: linear-gradient(180deg, #3a3d33, #23251f); }
+  .sw.bk::before { content: ""; position: absolute; left: 6px; bottom: 5px; width: 18px; height: 10px; border-radius: 3px; background: #ec7fb4; z-index: 1; }
+  .sw.gum { background: #f6a9cb; border: 3px solid #2a0f1e; border-radius: 4px; }
+  .sw.gum::after { background: #fff0f6aa; }
+  .sw.clay { background: #f5f1e8; border: 1px solid #e0d6c6; }
+  .sw.clay::after { background: #c9c2b4; }
+  .sw.clay::before { content: ""; position: absolute; right: 4px; top: 3px; width: 12px; height: 12px; z-index: 1; border-radius: 50%;
+    background: repeating-conic-gradient(#d97757 0 14deg, transparent 14deg 33deg); }
+
+  /* good to know */
+  .gtk { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin: 18px 0 0; padding: 0; list-style: none; }
+  .gtk li { border: 1px solid var(--line); background: var(--card); border-radius: 14px; padding: 14px 16px; color: var(--soft); font-size: 15px; }
+  .gtk li b { color: var(--fg); }
+
+  .coffee { text-align: center; margin: 40px 0 0; }
+  .credits { font-size: 14px; color: var(--faint); }
+  .credits li { color: var(--faint); margin: 3px 0; }
+  .credits a { color: var(--soft); }
+  footer { border-top: 1px solid var(--line); margin-top: 50px; padding: 26px 0 40px; color: var(--faint); font-size: 13px; text-align: center; }
 </style>
 </head>
 <body>
-<button class="theme" type="button" id="theme" aria-label="Switch light or dark">◐ Theme</button>
-<main>
 
-<header class="hero">
-  <img src="media/icon.png" width="112" height="112" alt="Skip Dat icon">
-  <h1>Skip Dat</h1>
-  <p class="tag">Every music app's queue, one Alt + scroll away.</p>
-  <p>Hold <kbd>Alt</kbd> and scroll anywhere in Windows. A glass wheel of your queue pops out of the cursor.</p>
-  <p>Let go to play the song you landed on. That's it. That's the app.</p>
-  <a class="dl" data-gh="releases/latest/download/SkipDat-setup.exe" href="../../releases/latest/download/SkipDat-setup.exe"><img src="media/download.png" alt="Download Skip Dat for Windows"></a>
-  <p class="meta">Version 1.4.1 · Windows 10 and 11 · under 4 MB · installs without admin rights · <a data-gh="releases" href="../../releases">all versions</a></p>
-  <img class="gif" src="media/hero.gif" alt="Holding Alt and scrolling on a black desktop: a glass wheel of song covers opens beside the cursor, scrolls through a YouTube Music queue and jumps straight to a song. Opening it again shows Back to Ochre Against Blue under the play button, one click goes back, then the wheel flips through Spotify and SoundCloud">
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="media/icon.png" alt="">Skip Dat</a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#new">New in 1.5</a>
+      <a href="#how">How to use it</a>
+      <a href="#looks">Styles and skins</a>
+      <a href="#apps">Apps</a>
+      <a href="#good">Good to know</a>
+      <a href="#build">Build</a>
+      <a href="#credits">Credits</a>
+    </nav>
+    <a class="btn pink" data-gh="releases/latest/download/SkipDat-setup.exe" href="../../releases/latest/download/SkipDat-setup.exe">Download</a>
+    <button class="btn ghost theme" id="theme" type="button" aria-label="Switch between light and dark">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+    </button>
+  </div>
 </header>
 
-<p>Works with <b>Spotify, Apple Music, YouTube Music, YouTube, SoundCloud</b> and other music players, all in one wheel. Chats, calls, social videos and ordinary YouTube videos are left out.</p>
+<main id="top">
 
-<h2>New in 1.4.1</h2>
+<div class="wrap hero">
+  <img class="icon" src="media/icon.png" width="108" height="108" alt="Skip Dat icon">
+  <h1>Skip Dat</h1>
+  <p class="tag">Every music app's queue, one <kbd>Alt</kbd> + scroll away.</p>
+  <p class="lede">Hold <kbd>Alt</kbd> and scroll anywhere in Windows. A glass wheel of your queue pops out of the cursor. Let go to play the song you landed on. That's it. That's the app.</p>
+  <a class="dl" data-gh="releases/latest/download/SkipDat-setup.exe" href="../../releases/latest/download/SkipDat-setup.exe"><img src="media/download.png" width="340" alt="Download Skip Dat for Windows"></a>
+  <p class="meta">Version 1.5.2 · Windows 10 and 11 · about 4 MB · installs without admin rights · <a data-gh="releases" href="../../releases">all versions</a></p>
+  <ul class="apps" aria-label="Works with">
+    <li>Spotify</li><li>YouTube Music</li><li>YouTube</li><li>SoundCloud</li><li>Apple Music</li><li>and other players</li>
+  </ul>
+  <div class="shot"><img src="media/hero.gif" width="1000" height="625" alt="Holding Alt and scrolling on a black desktop: a glass wheel of song covers opens beside the cursor, scrolls through a YouTube Music queue and jumps straight to a song. The heart under the play buttons fills when the song is liked, then the wheel flips through Spotify and SoundCloud"></div>
+  <p class="meta" style="margin-top:14px">All in one wheel. Chats, calls, social videos and ordinary YouTube videos are left out.</p>
+</div>
 
-<h3>Spotify, but it teleports <span class="badge">NEW</span></h3>
-<img class="gif" src="media/spotify-jump.gif" alt="Spotify is playing Letting You from The Slip. Scrolling four songs down to Lights in the Sky and letting go: the now-playing card changes straight to Lights in the Sky, with nothing played in between. Opening the wheel again shows the album carrying on with Corona Radiata">
-<p>Pick a Spotify song four places down and Skip Dat jumps <b>straight to it</b>. You don't hear the songs in between, not even muted. It starts the song inside the playlist or album you're playing, and that list carries on as usual afterwards.</p>
-<ul>
-  <li>This needs the optional <b>Spotify connection</b> in Settings (see <a href="#good-to-know">Good to know</a>).</li>
-  <li>Spotify can't start some lists (Liked Songs, artists, radio) at a particular song. For those, Skip Dat plays your song followed by the songs shown after it, in the same order.</li>
-  <li>With shuffle on, Spotify may pick a new shuffle order after the jump.</li>
-</ul>
+<section id="new">
+<div class="wrap">
+  <span class="kicker">New in 1.5</span>
+  <h2>More than skipping now</h2>
+  <p class="sub">Volume, jumping, liking and handing a song over to Spotify, all from the wheel. Plus a new style, a floating Settings window and new skins.</p>
 
-<h3>Back to …: undo for music <span class="badge">NEW</span></h3>
-<img class="gif" src="media/back-to.gif" alt="After a jump, the wheel shows Back to Letting You under the play/pause button. Clicking it goes back to Letting You; clicking it again returns to Lights in the Sky">
-<p>Under the play/pause button, <b>Back to …</b> shows the song you were playing before your last skip or jump. Skipped a banger by accident? Click it to go straight back. Click again to return.</p>
+  <div class="feat">
+    <div class="shot"><img src="media/volume-seek.gif" width="1000" height="625" loading="lazy" decoding="async" alt="Scrolling over the play/pause button turns Spotify up and down 5% a notch, with a message showing the volume. Scrolling over the song in front jumps forward and back 10 seconds a notch, with the time shown"></div>
+    <div>
+      <h3>Volume and jumping, right on the wheel <span class="badge">NEW</span></h3>
+      <ul>
+        <li><b>Scroll over play/pause</b> to turn the playing app up or down, 5% a notch. Desktop apps change only their own slider in Windows' volume mixer; YouTube and YouTube Music change only that tab.</li>
+        <li><b>Scroll over the song playing</b> to jump forward or back 10 seconds a notch.</li>
+      </ul>
+    </div>
+  </div>
 
-<h3>Also fixed</h3>
-<ul>
-  <li><b>The song before the current one is the one you really played.</b> Spotify's "recently played" leaves out anything heard for less than 30 seconds, so the wheel often showed an older song. Songs Skip Dat only skipped past on the way don't count as played any more.</li>
-  <li><b>The history button on the carousel could freeze Skip Dat</b>, so it's gone. <i>What was I playing?</i> lives in Settings and the tray menu, and opening it from there no longer locks the app up.</li>
-</ul>
-<p>Full list: <a data-gh="blob/HEAD/CHANGELOG.md" href="../CHANGELOG.md">CHANGELOG.md</a>.</p>
+  <div class="feat">
+    <div class="shot"><img src="media/song-buttons.gif" width="1000" height="625" loading="lazy" decoding="async" alt="Under the play buttons: pressing the heart adds the song to Liked Songs and the heart fills; pressing it again says it's already liked. The link button copies the song's link, and the play-next button puts a Spotify song straight after the one playing"></div>
+    <div>
+      <h3>Like, copy, play next <span class="badge">NEW</span></h3>
+      <ul>
+        <li><b>Like</b> adds the song to Spotify's Liked Songs, or presses Like on YouTube, YouTube Music and SoundCloud. <b>It never unlikes</b>: a liked song stays liked.</li>
+        <li><b>Copy link</b> copies the song's Spotify link, or the page of the song playing in your browser.</li>
+        <li><b>Play next</b> puts a Spotify song straight after the one playing.</li>
+      </ul>
+    </div>
+  </div>
 
-<h2>How to use it</h2>
+  <div class="feat">
+    <div class="shot"><img src="media/continue-spotify.gif" width="1000" height="625" loading="lazy" decoding="async" alt="A song is playing on YouTube Music. Pressing Continue on Spotify: Skip Dat finds the same song on Spotify, starts it at the same moment, and YouTube Music pauses"></div>
+    <div>
+      <h3>Continue on Spotify <span class="badge">NEW</span></h3>
+      <p>Heard something on YouTube Music, YouTube or SoundCloud? <b>Continue on Spotify</b> finds the same song on Spotify and starts it at about the same moment. The original pauses only once Spotify is really playing; if Spotify can't find or start it, nothing is paused.</p>
+    </div>
+  </div>
 
-<h3>1. Install it</h3>
-<img class="gif" src="media/install.gif" alt="Double-clicking the setup file, the installer's progress page with its glass animation, clicking Finish, and Skip Dat appearing in the tray with its Settings window">
-<ol>
-  <li>Download <b>SkipDat-setup.exe</b> with the button above and run it. It installs for your Windows account only, so Windows won't ask for an administrator.</li>
-  <li>If Windows says <i>"Windows protected your PC"</i>, click <b>More info</b>, then <b>Run anyway</b>. That shows up because the installer isn't code-signed yet.</li>
-  <li>Skip Dat starts in the <b>tray</b>, next to the clock. The first time, its Settings window opens by itself.</li>
-</ol>
-<p>While installing you can also pick a Start menu shortcut, a desktop shortcut and "Start with Windows".</p>
+  <div class="feat">
+    <div class="shot"><img src="media/freaky-random.gif" width="1000" height="625" loading="lazy" decoding="async" alt="The Freaky Random style: one big sharp card in front with a soft glow, and the rest of the queue floating round it in a ring, smaller and blurrier further away. Scrolling glides every card one place along the ring; pointing at a card lifts it, and clicking it brings it to the front"></div>
+    <div>
+      <h3>Freaky Random <span class="badge">NEW</span></h3>
+      <p>The song in front is big and sharp; the rest float round it in a ring, the next one always closest, the further ones smaller and blurrier. Each notch glides every card one place along the ring. <b>Point at a card to lift it, click it to play it.</b> The ring takes a new shape every time it opens.</p>
+    </div>
+  </div>
 
-<h3>2. Hold Alt, scroll, let go</h3>
-<img class="gif" src="media/hold-scroll-release.gif" alt="Holding Alt and scrolling: the wheel opens at the cursor and moves one song per notch, down for what's next and up for what already played. On letting go the chosen song plays and the wheel slips back into the cursor">
-<div class="tbl"><table>
-  <tr><th>Do this</th><th>What happens</th></tr>
-  <tr><td><b>Hold <kbd>Alt</kbd></b> and keep holding it</td><td>Nothing yet. Alt still works as usual everywhere.</td></tr>
-  <tr><td><b>Scroll</b> the mouse wheel</td><td>The wheel opens at your cursor. Each notch moves one song. Scroll down for what's next, up for what already played.</td></tr>
-  <tr><td><b>Let go of <kbd>Alt</kbd></b></td><td>The song in front plays and the wheel slips back into your cursor. If you didn't move off the song that's playing, nothing changes.</td></tr>
-</table></div>
+  <div class="feat">
+    <div class="shot"><img src="media/settings.gif" width="1000" height="625" loading="lazy" decoding="async" alt="The Settings window floating over the desktop with no frame or background, only its glass panels. Pressing Change next to Look grows a glass panel with the styles; Ctrl+K switches to the Skin panel; Esc closes it"></div>
+    <div>
+      <h3>Settings floats <span class="badge">NEW</span></h3>
+      <p>No window frame, no background: only glass panels floating over your desktop. Drag it by the top card and click straight through the gaps. <b>Look</b> and <b>Skin</b> each open in their own glass panel: <b>Change</b>, or <kbd>Ctrl</kbd> + <kbd>L</kbd> and <kbd>Ctrl</kbd> + <kbd>K</kbd>.</p>
+    </div>
+  </div>
 
-<h3>3. While you hold: click, control, switch apps</h3>
-<img class="gif" src="media/click-and-switch.gif" alt="While holding Alt: clicking a song plays it, the play/pause and next buttons beside the wheel work, and clicking Spotify or SoundCloud switches the wheel to that app's queue. Esc closes it without changing anything">
-<p>As long as you hold <kbd>Alt</kbd>, everything on the wheel is clickable:</p>
-<ul>
-  <li><b>Click any song</b> to play it straight away.</li>
-  <li><b>⏮ ⏯ ⏭</b> beside the wheel go back, play or pause, and skip.</li>
-  <li><b>Back to …</b> under them takes you to the song you were on before your last skip or jump.</li>
-  <li><b>Click an app's name</b> (YouTube Music, Spotify, SoundCloud...) to see that app's queue instead. The highlighted name is the app you're looking at.</li>
-  <li><b>Close without changing anything</b>: press <kbd>Esc</kbd> or click anywhere outside the wheel.</li>
-</ul>
-<details>
-  <summary>Keyboard and mouse shortcuts while holding</summary>
-  <div class="tbl"><table>
-    <tr><th></th><th>Vertical wheel</th><th>Horizontal wheel</th></tr>
-    <tr><td>Next / previous song</td><td><kbd>↓</kbd> <kbd>↑</kbd> or the mouse wheel</td><td><kbd>→</kbd> <kbd>←</kbd> or the mouse wheel</td></tr>
-    <tr><td>Switch app</td><td><kbd>→</kbd> <kbd>←</kbd>, <kbd>Tab</kbd>, the mouse's side buttons, or tilting the wheel</td><td><kbd>↓</kbd> <kbd>↑</kbd>, <kbd>Tab</kbd>, the mouse's side buttons, or tilting the wheel</td></tr>
-    <tr><td>Play or pause</td><td><kbd>Space</kbd> or a middle click</td><td><kbd>Space</kbd> or a middle click</td></tr>
-    <tr><td>Play the song in front</td><td><kbd>Enter</kbd></td><td><kbd>Enter</kbd></td></tr>
+  <div class="feat">
+    <div class="shot"><img src="media/glass-colour.gif" width="1000" height="625" loading="lazy" decoding="async" alt="In the Skin panel, dragging the colour slider under Liquid Glass; the carousel's glass turns that colour while staying see-through, then Original puts the clear glass back"></div>
+    <div>
+      <h3>Liquid Glass in your own colour <span class="badge">NEW</span></h3>
+      <p>A colour slider under <b>Liquid Glass</b> tints the glass any colour. It stays glass, with its blur, light and depth, and the words stay easy to read. <b>Original</b> puts the clear glass back.</p>
+    </div>
+  </div>
+
+  <p class="note"><b>Spotify users coming from 1.4:</b> press <b>Reconnect</b> once under Spotify in Settings, so Like and Continue on Spotify can use your Liked Songs. Everything else is in <a data-gh="blob/HEAD/CHANGELOG.md" href="../CHANGELOG.md">CHANGELOG.md</a>.</p>
+</div>
+</section>
+
+<section id="how">
+<div class="wrap">
+  <span class="kicker">How to use it</span>
+  <h2>Four steps, then it's muscle memory</h2>
+  <p class="sub">Install it, hold the shortcut, scroll, let go.</p>
+
+  <div class="step">
+    <div class="n">1</div>
+    <div>
+      <h3>Install it</h3>
+      <div class="shot"><img src="media/install.gif" width="1000" height="625" loading="lazy" decoding="async" alt="On a black desktop: double-clicking SkipDat-1.5.2-setup.exe, the installer's Components page (Start menu shortcut, desktop shortcut, Start with Windows), the install page with its glass animation, clicking Finish, and Skip Dat appearing in the tray as the floating Settings opens by itself"></div>
+      <ol>
+        <li>Download <b>SkipDat-setup.exe</b> and run it. It installs for your Windows account only, so Windows won't ask for an administrator.</li>
+        <li>If Windows says <i>"Windows protected your PC"</i>, click <b>More info</b>, then <b>Run anyway</b>. The installer isn't code-signed yet.</li>
+        <li>Skip Dat starts in the <b>tray</b>, next to the clock. The first time, Settings opens by itself.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">2</div>
+    <div>
+      <h3>Hold Alt, scroll, let go</h3>
+      <div class="shot"><img src="media/hold-scroll-release.gif" width="1000" height="625" loading="lazy" decoding="async" alt="Holding Alt and scrolling: the wheel opens at the cursor and moves one song per notch, down for what's next and up for what already played. On letting go the chosen song plays and the wheel slips back into the cursor"></div>
+      <div class="tbl"><table>
+        <tr><th>Do this</th><th>What happens</th></tr>
+        <tr><td><b>Hold <kbd>Alt</kbd></b> and keep holding it</td><td>Nothing yet. Alt still works as usual everywhere.</td></tr>
+        <tr><td><b>Scroll</b> the mouse wheel</td><td>The wheel opens at your cursor. Each notch moves one song: down for what's next, up for what already played.</td></tr>
+        <tr><td><b>Let go of <kbd>Alt</kbd></b></td><td>The song in front plays and the wheel slips back into your cursor. If you stayed on the song that's playing, nothing changes.</td></tr>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">3</div>
+    <div>
+      <h3>While you hold: click, control, switch apps</h3>
+      <div class="shot"><img src="media/click-and-switch.gif" width="1000" height="625" loading="lazy" decoding="async" alt="While holding Alt: clicking a song plays it, the play/pause and next buttons beside the wheel work, and clicking Spotify or SoundCloud switches the wheel to that app's queue. Esc closes it without changing anything"></div>
+      <ul>
+        <li><b>Click any song</b> to play it straight away.</li>
+        <li><b>Previous, play/pause and next</b> beside the wheel do what they say; <b>Like, Copy link, Play next and Continue on Spotify</b> sit under them.</li>
+        <li><b>Back to …</b> takes you to the song you were on before your last skip or jump.</li>
+        <li><b>Click an app's name</b> to see that app's queue instead.</li>
+        <li><b>Close without changing anything</b>: <kbd>Esc</kbd>, or a click anywhere outside the wheel.</li>
+      </ul>
+      <details>
+        <summary>Keyboard and mouse shortcuts while holding</summary>
+        <div class="tbl"><table>
+          <tr><th></th><th>Vertical wheel</th><th>Horizontal wheel</th></tr>
+          <tr><td>Next / previous song</td><td><kbd>↓</kbd> <kbd>↑</kbd> or the mouse wheel</td><td><kbd>→</kbd> <kbd>←</kbd> or the mouse wheel</td></tr>
+          <tr><td>Switch app</td><td><kbd>→</kbd> <kbd>←</kbd>, <kbd>Tab</kbd>, the mouse's side buttons, or tilting the wheel</td><td><kbd>↓</kbd> <kbd>↑</kbd>, <kbd>Tab</kbd>, the side buttons, or tilting the wheel</td></tr>
+          <tr><td>Play or pause</td><td><kbd>Space</kbd> or a middle click</td><td><kbd>Space</kbd> or a middle click</td></tr>
+          <tr><td>Play the song in front</td><td><kbd>Enter</kbd></td><td><kbd>Enter</kbd></td></tr>
+          <tr><td>Volume</td><td colspan="2">the mouse wheel over play/pause</td></tr>
+          <tr><td>Jump 10 seconds</td><td colspan="2">the mouse wheel over the song in front</td></tr>
+        </table></div>
+      </details>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">4</div>
+    <div>
+      <h3>Spotify jumps, and Back to …</h3>
+      <div class="shot"><img src="media/spotify-jump.gif" width="1000" height="625" loading="lazy" decoding="async" alt="Spotify is playing Letting You from The Slip. Scrolling four songs down to Lights in the Sky and letting go: the now-playing card changes straight to Lights in the Sky, with nothing played in between"></div>
+      <p>Pick a Spotify song four places down and Skip Dat jumps <b>straight to it</b>: you don't hear the songs in between, not even muted. It starts inside the playlist or album you're playing, and that list carries on. This needs the optional <b>Spotify connection</b> (see <a href="#good">Good to know</a>).</p>
+      <div class="shot"><img src="media/back-to.gif" width="1000" height="625" loading="lazy" decoding="async" alt="After a jump, the wheel shows Back to Letting You under the play/pause button. Clicking it goes back to Letting You; clicking it again returns to Lights in the Sky"></div>
+      <p><b>Back to …</b> is undo for music: the song you were playing before your last skip or jump. Click it to go straight back, and again to return.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">5</div>
+    <div>
+      <h3>Use your own shortcut</h3>
+      <div class="shot"><img src="media/shortcut.gif" width="1000" height="625" loading="lazy" decoding="async" alt="Double-clicking the tray icon opens the floating Settings; choosing Ctrl + Alt under Shortcut; then holding Ctrl + Alt and scrolling opens the wheel"></div>
+      <p><b>Double-click the Skip Dat icon in the tray</b> for Settings, then pick one under <b>Shortcut</b>. It works right away: <kbd>Alt</kbd> (the default), <kbd>Ctrl</kbd>, <kbd>Shift</kbd>, the <kbd>Windows</kbd> key, <kbd>Ctrl</kbd> + <kbd>Alt</kbd>, <kbd>Ctrl</kbd> + <kbd>Shift</kbd>, <kbd>Alt</kbd> + <kbd>Shift</kbd>, or the <b>right</b>, <b>Back</b> or <b>Forward</b> mouse button. A normal click or drag with that button still works; it only opens the wheel when you scroll while holding it.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">6</div>
+    <div>
+      <h3>What was I playing?</h3>
+      <div class="shot"><img src="media/history.gif" width="1000" height="625" loading="lazy" decoding="async" alt="Right-clicking Skip Dat in the tray, choosing What was I playing?, and the history window listing recent songs with cover, app and time. Clicking one plays it again"></div>
+      <p>Right-click Skip Dat in the tray (or open Settings) and choose <b>What was I playing?</b> It lists what you listened to, newest first, with the app, the time and the cover. Click one to play it again. It stays on your PC, and <b>Clear history</b> empties it.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">7</div>
+    <div>
+      <h3>YouTube Music, YouTube and SoundCloud: add the browser companion</h3>
+      <div class="shot"><img src="media/companion.gif" width="1000" height="625" loading="lazy" decoding="async" alt="In the browser's extensions page: turning on Developer mode, clicking Load unpacked, choosing the browser-companion folder in Skip Dat's folder, the Skip Dat companion 1.5.2 appearing in the list, and Settings showing Connected after the music tab is reloaded"></div>
+      <p>Browser music shows up by itself, but only the song that's on. For the <b>whole queue</b> (playlists, mixes and radio), playing any song in it, and volume, jumping and Like on that tab, add the small companion once. It works in Chrome, Edge, Brave and Opera:</p>
+      <ol>
+        <li>Open <code>chrome://extensions</code> in a new tab (in Edge, <code>edge://extensions</code>).</li>
+        <li>Turn on <b>Developer mode</b>.</li>
+        <li>Click <b>Load unpacked</b> and choose the <b>browser-companion</b> folder in <code>%LOCALAPPDATA%\Programs\Skip Dat</code>. The <b>Show folder</b> button in Settings opens it.</li>
+        <li>Reload any music tab that was already open.</li>
+      </ol>
+      <p>Settings shows <b>Connected</b> once a music tab has talked to Skip Dat. After updating Skip Dat, press the companion's reload button once.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section id="looks">
+<div class="wrap">
+  <span class="kicker">Styles and skins</span>
+  <h2>Make it look like yours</h2>
+  <p class="sub">In Settings, <b>Change</b> next to <b>Look</b> (<kbd>Ctrl</kbd> + <kbd>L</kbd>) or <b>Skin</b> (<kbd>Ctrl</kbd> + <kbd>K</kbd>). Every change applies at once.</p>
+
+  <div class="shot"><img src="media/styles.gif" width="1000" height="625" loading="lazy" decoding="async" alt="The same queue shown in each style in turn: Wheel, Stack, Cover flow, Orbit, Compact and Freaky Random"></div>
+  <div class="tbl" style="margin-top:16px"><table>
+    <tr><th>Style</th><th>What it looks like</th></tr>
+    <tr><td><b>Wheel</b></td><td>Cards on a turning drum, the default. Vertical beside your cursor, or horizontal in a row above it.</td></tr>
+    <tr><td><b>Stack</b></td><td>A flat list of cards.</td></tr>
+    <tr><td><b>Cover flow</b></td><td>A row, turned to face you.</td></tr>
+    <tr><td><b>Orbit</b></td><td>A tilted ring of songs round your cursor, the far side blurred.</td></tr>
+    <tr><td><b>Compact</b></td><td>Just the titles, small.</td></tr>
+    <tr><td><b>Freaky Random</b> <span class="badge">NEW</span></td><td>The song in front is big; the rest float round it in a ring, the next one closest.</td></tr>
   </table></div>
-</details>
+  <p class="meta">Also under Look: <b>Size</b> (Small, Medium, Large) and <b>Depth</b> (how much the songs away from the middle blur and fade).</p>
 
-<h3>4. Use your own shortcut</h3>
-<img class="gif" src="media/shortcut.gif" alt="Double-clicking the tray icon opens Settings; choosing Ctrl + Alt under Shortcut; then holding Ctrl + Alt and scrolling opens the wheel">
-<p><b>Double-click the Skip Dat icon in the tray</b> to open Settings, then choose one under <b>Shortcut</b>. It works right away:</p>
-<ul>
-  <li><kbd>Alt</kbd> (the default), <kbd>Ctrl</kbd>, <kbd>Shift</kbd> or the <kbd>Windows</kbd> key</li>
-  <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd>, <kbd>Ctrl</kbd> + <kbd>Shift</kbd> or <kbd>Alt</kbd> + <kbd>Shift</kbd></li>
-  <li>the <b>right mouse button</b>, or the mouse's <b>Back</b> or <b>Forward</b> side button. A normal click or drag with that button still works; it only opens the wheel when you scroll while holding it.</li>
-</ul>
+  <div class="shot" style="margin-top:28px"><img src="media/skins.gif" width="1000" height="625" loading="lazy" decoding="async" alt="The wheel in each built-in skin in turn: Liquid Glass, Lime Pod, LCD Night, Brushed Chrome, Pixel Party, Quicksilver, Bare Knuckle, Bubble Gum and Claude-ish, with their torches, drips, bulbs, bubbles and sparks moving"></div>
+  <div class="skins">
+    <div class="skin"><i class="sw glass"></i><div><b>Liquid Glass</b><span>The default: frosted glass over your desktop, in any colour you like.</span></div></div>
+    <div class="skin"><i class="sw lime"></i><div><b>Lime Pod</b><span>Glossy lime plastic and a swaying chrome antenna, a 2000s player.</span></div></div>
+    <div class="skin"><i class="sw lcd"></i><div><b>LCD Night</b><span>A green pocket-player screen, scanlines and a battery that charges.</span></div></div>
+    <div class="skin"><i class="sw chrome"></i><div><b>Brushed Chrome</b><span>Brushed metal, real screws and a breathing pink LED.</span></div></div>
+    <div class="skin"><i class="sw pixel"></i><div><b>Pixel Party</b><span>An 8-bit cave with grass, a pickaxe and a burning torch.</span></div></div>
+    <div class="skin"><i class="sw qs"></i><div><b>Quicksilver</b> <span class="badge">NEW</span><span>Liquid mercury along the edge, with a drip that gathers and falls.</span></div></div>
+    <div class="skin"><i class="sw bk"></i><div><b>Bare Knuckle</b> <span class="badge">NEW</span><span>A basement under green fluorescent light: hand wrap, rules note, pink soap, a swinging bulb, and a flicker of film on every song change.</span></div></div>
+    <div class="skin"><i class="sw gum"></i><div><b>Bubble Gum</b> <span class="badge">NEW</span><span>An 8-bit gum wrapper whose bubble blows up and pops, right away when you skip.</span></div></div>
+    <div class="skin"><i class="sw clay"></i><div><b>Claude-ish</b> <span class="badge">NEW</span><span>Warm cream paper, a serif title, terracotta buttons and a spark that slowly turns. An unofficial fan skin.</span></div></div>
+  </div>
+  <p><b>Make your own</b>: a skin is a folder with a <code>skin.json</code> file, plus any pictures and fonts it uses. Pictures can swing, breathe, flicker or play when the song changes. <b>Open skins folder</b> in the Skin panel takes you there, a starter skin is waiting, and the carousel updates as you save. Everything you can change is in <a data-gh="blob/HEAD/SKINS.md" href="../SKINS.md">SKINS.md</a>.</p>
+</div>
+</section>
 
-<h3>5. Pick a style</h3>
-<img class="gif" src="media/styles.gif" alt="The same queue shown in each style in turn: Wheel, Stack, Cover flow, Orbit and Compact">
-<p>In Settings, under <b>Look</b>:</p>
-<ul>
-  <li><b>Style</b>: <b>Wheel</b> (cards on a turning drum, the default), <b>Stack</b> (a flat list of cards), <b>Cover flow</b> (a row, turned to face you), <b>Orbit</b> (a tilted ring of songs round your cursor, the far side blurred) or <b>Compact</b> (just the titles, small).</li>
-  <li><b>Wheel direction</b>, for the Wheel: <b>Vertical</b> stands beside your cursor; <b>Horizontal</b> lines the songs up in a row above it (below it near the top of the screen).</li>
-  <li><b>Size</b>: Small, Medium (the default) or Large.</li>
-  <li><b>Depth</b>: how much the songs away from the middle <b>blur</b> and <b>fade</b>. Both at 0 keeps every card sharp.</li>
-</ul>
-<p>Every change applies at once, with no restart.</p>
+<section id="apps">
+<div class="wrap">
+  <span class="kicker">Apps</span>
+  <h2>What it shows for each app</h2>
+  <p class="sub">Nothing is made up: when an app doesn't share what's next, the wheel shows what it played and what's on, and a note says so.</p>
+  <div class="tbl"><table>
+    <tr><th>App</th><th class="c">Song that's on</th><th>Upcoming songs</th><th>Pick a song from the list</th></tr>
+    <tr><td><b>YouTube Music</b> (with the companion)</td><td class="c">✓</td><td>The whole Up next list: albums, playlists, mixes and radio, autoplay included</td><td>Plays it directly</td></tr>
+    <tr><td><b>YouTube</b> playlist or mix (with the companion)</td><td class="c">✓</td><td>The playlist or mix, growing as YouTube adds to it</td><td>Plays it directly</td></tr>
+    <tr><td><b>YouTube</b> single video (with the companion)</td><td class="c">✓</td><td>The one song autoplay will play next</td><td>Skips to it, muted on the way</td></tr>
+    <tr><td><b>SoundCloud</b> (with the companion)</td><td class="c">✓</td><td>The Next up list</td><td>Plays it directly (with shuffle on, skips to it muted, so the order stays)</td></tr>
+    <tr><td><b>Spotify</b> app</td><td class="c">✓</td><td>With the optional Spotify connection</td><td>Jumps straight to it when connected, inside your playlist or album; skips to it muted otherwise</td></tr>
+    <tr><td><b>Apple Music</b> and other music apps</td><td class="c">✓</td><td>Not shared by the app; you see the songs it played</td><td>Skips back through them, muted on the way</td></tr>
+    <tr><td>Music in a browser without the companion</td><td class="c">✓</td><td>—</td><td>Skips, muted on the way</td></tr>
+  </table></div>
+  <p class="meta">When Skip Dat has to press next or previous several times to reach your song, it mutes only that app, through Windows' volume mixer, until your song starts. Your queue and shuffle order stay as they were.</p>
+</div>
+</section>
 
-<h3>6. Skins</h3>
-<img class="gif" src="media/skins.gif" alt="The wheel in each built-in skin in turn: Liquid Glass, Lime Pod, LCD Night, Brushed Chrome and Pixel Party">
-<p>Pick one under <b>Settings → Skin</b>:</p>
-<ul>
-  <li><b>Liquid Glass</b>: the default, frosted glass over your desktop.</li>
-  <li><b>Lime Pod</b>: glossy lime plastic and chrome, a 2000s media player look.</li>
-  <li><b>LCD Night</b>: a green pocket-player screen with scanlines.</li>
-  <li><b>Brushed Chrome</b>: brushed metal and a pixel font.</li>
-  <li><b>Pixel Party</b>: an 8-bit cave, with grass and a pickaxe on top and a flickering torch.</li>
-</ul>
-<p><b>Make your own</b>: a skin is a folder with a <code>skin.json</code> file, plus any pictures and fonts it uses. <b>Open skins folder</b> in Settings takes you there, and a starter skin is waiting in it. Skip Dat watches the folder, so the carousel updates as you save. Everything you can change is in <a data-gh="blob/HEAD/SKINS.md" href="../SKINS.md">SKINS.md</a>.</p>
+<section id="good">
+<div class="wrap">
+  <span class="kicker">Good to know</span>
+  <h2>The small print, but useful</h2>
+  <ul class="gtk">
+    <li><b>The Spotify connection</b> (Settings → Spotify's upcoming songs) gives upcoming songs, straight jumps, Like, Play next and Continue on Spotify. Connect a free Spotify developer app (Client ID); Spotify requires its owner to have Premium.</li>
+    <li><b>Performance mode</b> (Settings → Options), for gaming and slower PCs: no blur, glass, shadows, animations, skin pictures or album art.</li>
+    <li><b>Nothing leaves your PC.</b> No account, no tracking. The companion only talks to Skip Dat on your own computer (<code>127.0.0.1</code>), and your history stays in Skip Dat's folder.</li>
+    <li><b>Settings has no title bar</b>: drag it by the top card. <kbd>Alt</kbd> + <kbd>F4</kbd> closes it too, and the tray icon always opens it again.</li>
+    <li><b>Updating</b>: run a newer installer. It keeps your settings, skins and history. Reload the browser companion afterwards.</li>
+    <li><b>If something goes wrong</b>, <code>skipdat.log</code> in <code>%APPDATA%\app.skipdat.desktop</code> says what happened. Attach it to an issue.</li>
+    <li><b>Removing</b>: Windows Settings → Apps → Skip Dat → Uninstall, and remove the browser companion too.</li>
+    <li><b>Limits</b>: no wheel over a window running as administrator, or over full-screen exclusive games. Firefox isn't supported by the companion yet; its music still shows up, without the queue.</li>
+  </ul>
+</div>
+</section>
 
-<h3>7. What was I playing?</h3>
-<img class="gif" src="media/history.gif" alt="Right-clicking Skip Dat in the tray, choosing What was I playing?, and the history window listing recent songs with cover, app and time. Clicking one plays it again">
-<p>Right-click Skip Dat in the tray (or open Settings) and choose <b>What was I playing?</b> It lists the songs you listened to, newest first, with the app, the time and the cover. Click one to play it again. A song counts once it has played for a few seconds; songs Skip Dat only skipped past don't count. The list stays on your PC, and <b>Clear history</b> empties it.</p>
-
-<h3>8. YouTube Music, YouTube and SoundCloud: add the browser companion</h3>
-<img class="gif" src="media/companion.gif" alt="In the browser's extensions page: turning on Developer mode, clicking Load unpacked, choosing the browser-companion folder, and the Skip Dat companion appearing in the list">
-<p>Music playing in a browser shows up in the wheel by itself, but only the song that's on. To see the <b>whole queue</b> of YouTube Music, YouTube and SoundCloud (playlists, mixes and radio included) and play any song in it, add the small companion extension once. It works in Chrome, Edge, Brave and Opera:</p>
-<ol>
-  <li>Open <code>chrome://extensions</code> in a new tab. In Edge it's <code>edge://extensions</code>.</li>
-  <li>Turn on <b>Developer mode</b>.</li>
-  <li>Click <b>Load unpacked</b> and choose the <b>browser-companion</b> folder. It's in <code>%LOCALAPPDATA%\Programs\Skip Dat</code>, and the <b>Show folder</b> button in Settings opens it.</li>
-  <li>Reload any music tab that was already open.</li>
-</ol>
-<p>Settings shows <b>Connected</b> once a music tab has talked to Skip Dat.</p>
-
-<h2>What it shows for each app</h2>
-<div class="tbl"><table>
-  <tr><th>App</th><th class="c">Song that's on</th><th>Upcoming songs</th><th>Pick a song from the list</th></tr>
-  <tr><td><b>YouTube Music</b> (with the companion)</td><td class="c">✓</td><td>The whole Up next list: albums, playlists, mixes and radio, autoplay included</td><td>Plays it directly</td></tr>
-  <tr><td><b>YouTube</b> playlist or mix (with the companion)</td><td class="c">✓</td><td>The playlist or mix, growing as YouTube adds to it</td><td>Plays it directly</td></tr>
-  <tr><td><b>YouTube</b> single video (with the companion)</td><td class="c">✓</td><td>The one song autoplay will play next</td><td>Skips to it, muted on the way</td></tr>
-  <tr><td><b>SoundCloud</b> (with the companion)</td><td class="c">✓</td><td>The Next up list</td><td>Plays it directly (with shuffle on, skips to it muted, so the shuffle order stays)</td></tr>
-  <tr><td><b>Spotify</b> app</td><td class="c">✓</td><td>Only with the optional Spotify connection (see below)</td><td><b>New in 1.4.1:</b> jumps straight to it when connected, inside your playlist or album; skips to it muted otherwise</td></tr>
-  <tr><td><b>Apple Music</b> and other music apps</td><td class="c">✓</td><td>Not shared by the app; you see the songs it played</td><td>Skips back through them, muted on the way</td></tr>
-  <tr><td>Music in a browser without the companion</td><td class="c">✓</td><td>—</td><td>Skips, muted on the way</td></tr>
-</table></div>
-<p>Nothing is made up: when an app doesn't share what's next, the wheel shows what it played and what's on, and a note says so.</p>
-<p>When Skip Dat has to press next or previous several times to reach your song, it mutes that one app (only that app, through Windows' volume mixer) until your song starts, so you don't hear the songs in between. Your queue and shuffle order stay as they were, minus the songs you skipped. Players with no previous song (or no next one) are left alone at the end of their list.</p>
-
-<h2 id="good-to-know">Good to know</h2>
-<ul>
-  <li><b>Spotify's upcoming songs and straight jumps</b>: open Settings → <i>Spotify's upcoming songs</i> and connect a free Spotify developer app (Client ID). Spotify requires the developer app's owner to have Premium. Anything Spotify refuses is written to <code>skipdat.log</code>.</li>
-  <li><b>Performance mode</b> (Settings → Options), for gaming and slower PCs: no blur, glass, shadows, animations or album art. In our test (graphics drawn in software) the open carousel used about 80% less processor time; on a real graphics card the saving will vary, but it skips the desktop capture and album art loading either way. When the carousel is closed, Skip Dat lets go of its graphics memory in every mode.</li>
-  <li><b>Nothing leaves your PC.</b> There's no account and no tracking. The companion only talks to Skip Dat on your own computer (<code>127.0.0.1</code>), and your listening history stays in Skip Dat's folder.</li>
-  <li><b>Updating</b>: run a newer installer. It closes Skip Dat, replaces it and keeps your settings, skins and history. If you use the browser companion, click its reload button on the extensions page afterwards.</li>
-  <li><b>If something goes wrong</b>, <code>skipdat.log</code> in <code>%APPDATA%\app.skipdat.desktop</code> says what happened, crashes included. Attach it to an issue.</li>
-  <li><b>Removing</b>: Windows Settings → Apps → Skip Dat → Uninstall. Remove the browser companion from your browser too.</li>
-  <li>While a window that runs <b>as administrator</b> has focus, Windows doesn't pass the shortcut to normal apps, so the wheel won't open over it.</li>
-  <li><b>Full-screen games</b> in exclusive mode draw over everything, including the wheel.</li>
-  <li><b>Firefox</b> isn't supported by the companion yet. Its music still shows up, without the queue.</li>
-</ul>
-
-<h2>Build it yourself</h2>
-<p>Skip Dat is a <a href="https://tauri.app">Tauri 2</a> app: Rust for the Windows side, and HTML, CSS and WebGL for the wheel and Settings.</p>
-<ol>
-  <li>Install Rust from <a href="https://rustup.rs">rustup.rs</a> (the default MSVC toolchain) and the <b>Visual Studio Build Tools</b> with "Desktop development with C++".</li>
-  <li>In <code>src-tauri</code>, run <code>cargo build --release</code>. The app is <code>src-tauri\target\release\skip-dat.exe</code>, and it needs <code>WebView2Loader.dll</code> beside it.</li>
-  <li>In <code>installer/anim</code>, run <code>cargo build --release</code> for the installer's animation.</li>
-  <li>For the installer, install NSIS 3 and run <code>installer/build.sh</code> from Git Bash or WSL.</li>
-</ol>
-<p>Releases are cross-compiled from Linux with MinGW (<code>x86_64-pc-windows-gnu</code>) and built with NSIS 3.09.</p>
-<details>
-  <summary>How the parts fit</summary>
-<pre><code>src-tauri/src/hooks.rs     global input: the shortcut, one step per wheel notch, clicks on the wheel's
-                           buttons, Esc / click-away, and a watchdog so the wheel can never get stuck
-src-tauri/src/overlay.rs   the transparent, click-through, always-on-top window that never takes focus;
-                           photographs the desktop behind it for the glass
-src-tauri/src/media.rs     Windows media sessions, driven by Windows' change events
+<section id="build">
+<div class="wrap">
+  <span class="kicker">Build it yourself</span>
+  <h2>Rust underneath, glass on top</h2>
+  <p class="sub">Skip Dat is a <a href="https://tauri.app">Tauri 2</a> app: Rust for the Windows side, and HTML, CSS and WebGL for the wheel and Settings.</p>
+  <ol>
+    <li>Install Rust from <a href="https://rustup.rs">rustup.rs</a> (the default MSVC toolchain) and the <b>Visual Studio Build Tools</b> with "Desktop development with C++".</li>
+    <li>In <code>src-tauri</code>, run <code>cargo build --release</code>. The app is <code>src-tauri\target\release\skip-dat.exe</code>.</li>
+    <li>In <code>installer/anim</code>, run <code>cargo build --release</code> for the installer's animation.</li>
+    <li>For the installer, install NSIS 3 and run <code>installer/build.sh</code> from Git Bash or WSL.</li>
+  </ol>
+  <details>
+    <summary>How the parts fit</summary>
+<pre><code>src-tauri/src/hooks.rs     global input: the shortcut, one step per wheel notch, clicks on the wheel's buttons
+src-tauri/src/overlay.rs   the transparent, click-through, always-on-top window; photographs the desktop for the glass
+src-tauri/src/media.rs     Windows media sessions; jumping within a song
 src-tauri/src/browser.rs   local server (127.0.0.1:47231) for the browser companion, extension-only
-src-tauri/src/classify.rs  what is music and what isn't (unit-tested)
 src-tauri/src/view.rs      builds each app's real song list; pushes updates only when they change
 src-tauri/src/actions.rs   plays, skips and jumps, one at a time in order; Back to; replays from the history
-src-tauri/src/plan.rs      how to reach a song on each player: jump, muted skip, or leave it (unit-tested)
-src-tauri/src/audio.rs     mutes one app in Windows' volume mixer while skipping, and always unmutes
-src-tauri/src/history.rs   "What was I playing?", kept in a local file (unit-tested)
-src-tauri/src/skins.rs     built-in and user skins, the skins folder watcher, skipskin:// files
-src-tauri/src/util.rs      crash-proof locks and the log (skipdat.log, beside the settings)
-src-tauri/src/art.rs       album art store, served to the windows as skipart://&lt;id&gt;
-src-tauri/src/spotify.rs   optional Spotify sign-in (PKCE, no secret stored): upcoming songs and straight jumps
-browser-companion/         the Chrome / Edge extension: page.js reads the page, bridge.js and
-                           background.js carry messages to the app
-ui/overlay.js              WebGL renderer and motion; the styles, depth, skins and performance mode
-ui/settings.html           Settings: playing now, shortcut, look, skin, companion, hidden apps, options
-ui/history.html            the "What was I playing?" window
+src-tauri/src/extras.rs    volume, jumping within a song, Like, Copy link, Play next, Continue on Spotify
+src-tauri/src/plan.rs      how to reach a song on each player: jump, muted skip, or leave it
+src-tauri/src/audio.rs     one app's slider in Windows' volume mixer: muting while skipping, volume
+src-tauri/src/skins.rs     built-in and user skins, the skins folder watcher
+src-tauri/src/float.rs     the floating Settings window: clicks between its panels pass through
+src-tauri/src/spotify.rs   optional Spotify sign-in (PKCE, no secret stored) and its Web API calls
+browser-companion/         the Chrome / Edge extension that reads and drives the player
+ui/overlay.js              WebGL renderer and motion: styles, depth, skins, performance mode
+ui/settings.html           Settings: playing now, shortcut, the Look and Skin panels, companion, options
 ui/skins/                  the built-in skins; SKINS.md explains the format
-installer/                 the NSIS installer and its animation helper (installer/anim)
-branding/                  the icon and installer art, drawn by script
-docs/media/                the pictures and GIFs on this page
-docs/recorder/             records those GIFs from the real carousel code (see its README)</code></pre>
-</details>
+docs/recorder/             records the GIFs on this page from the real carousel code</code></pre>
+  </details>
+  <p class="coffee"><a class="btn pink" href="https://buymeacoffee.com/ffoouuaadd">Buy me a coffee</a></p>
+</div>
+</section>
 
-<p>If Skip Dat is useful to you, you can <a href="https://buymeacoffee.com/ffoouuaadd">buy me a coffee</a>. There's a button in Settings too.</p>
-
-<h2>Credits</h2>
-<div class="credits">
+<section id="credits">
+<div class="wrap credits">
+  <span class="kicker">Credits</span>
   <p>The GIFs show Skip Dat's real carousel, recorded with real albums that their artists released under Creative Commons, shown with their real covers. Go listen to them, they're free.</p>
   <ul>
     <li><b>Nine Inch Nails</b>: <a href="https://archive.org/details/nine_inch_nails_the_slip"><i>The Slip</i></a> and <a href="https://archive.org/details/nineinchnails_ghosts_I_IV"><i>Ghosts I–IV</i></a>, licensed <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/us/">CC BY-NC-SA 3.0 US</a>.</li>
@@ -269,12 +497,18 @@ docs/recorder/             records those GIFs from the real carousel code (see i
         <li>Berlinist, <a href="https://archive.org/details/badpanda081"><i>My Darling Grace</i></a></li>
       </ul></li>
     <li>The covers are shown as released, cropped square. Because they're NonCommercial-ShareAlike, <b>the GIFs on this page are shared under <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/">CC BY-NC-SA 3.0</a></b> too.</li>
-    <li>The desktop in the demos is plain black; the meme captions and stickers were made for them.</li>
-    <li>Skip Dat isn't affiliated with Spotify, YouTube, SoundCloud, Apple, Bad Panda Records or any artist named here.</li>
+    <li>The desktop in the demos is plain black; the meme captions and stickers were made for them. All skin art is original.</li>
+    <li>Skip Dat isn't affiliated with Spotify, YouTube, SoundCloud, Apple, Anthropic, Bad Panda Records or any artist named here. Claude-ish is an unofficial fan skin.</li>
   </ul>
 </div>
+</section>
 
 </main>
+
+<footer>
+  <div class="wrap">Skip Dat 1.5.2 · <a data-gh="releases" href="../../releases">releases</a> · <a data-gh="blob/HEAD/CHANGELOG.md" href="../CHANGELOG.md">changelog</a> · <a data-gh="blob/HEAD/SKINS.md" href="../SKINS.md">make a skin</a></div>
+</footer>
+
 <script>
   // On GitHub Pages (owner.github.io/repo/), point repo links at github.com/owner/repo.
   (() => {
@@ -289,7 +523,7 @@ docs/recorder/             records those GIFs from the real carousel code (see i
     const root = document.documentElement, key = 'skipdat-theme';
     try { const t = localStorage.getItem(key); if (t) root.dataset.theme = t; } catch (e) {}
     document.getElementById('theme').addEventListener('click', () => {
-      const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+      const dark = root.dataset.theme ? root.dataset.theme === 'dark' : !matchMedia('(prefers-color-scheme: light)').matches;
       root.dataset.theme = dark ? 'light' : 'dark';
       try { localStorage.setItem(key, root.dataset.theme); } catch (e) {}
     });

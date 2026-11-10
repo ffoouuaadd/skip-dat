@@ -38,6 +38,41 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const clamp01 = x => clamp(x, 0, 1);
 const lerp = (a, b, x) => a + (b - a) * x;
 const smoothstep = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+// a steady pseudo-random number 0–1 for each n (particles keep their own path)
+const hash01 = n => { const s = Math.sin(n * 12.9898) * 43758.5453; return s - Math.floor(s); };
+
+// ---------- a skin's moving pictures ----------
+// A decoration's motion at time t. Still when motion is off (reduced motion, performance mode).
+function decoMotion(anim, t, i) {
+  const still = { dx: 0, dy: 0, rot: 0, s: 1, a: 1 };
+  if (!anim || !FEEL.float) return still;
+  const ph = i * 1.7, w = 0.5 + 0.5 * Math.sin(t * 3 + ph);
+  switch (anim) {
+    case 'bob': return { ...still, dy: 4 * Math.sin(t * 2 + ph) };
+    case 'sway': return { ...still, rot: 0.07 * Math.sin(t * 1.6 + ph) };
+    case 'spin': return { ...still, rot: t * 1.1 };
+    case 'pulse': return { ...still, s: 1 + 0.06 * w, a: 0.85 + 0.15 * w };
+    case 'flicker': return { ...still, a: 0.72 + 0.28 * (0.5 + 0.5 * Math.sin(t * 13 + ph) * Math.sin(t * 7.3 + 2 * ph)) };
+    case 'twinkle': { const q = 0.5 + 0.5 * Math.sin(t * 2.3 + ph); return { ...still, s: 0.8 + 0.25 * q, a: 0.3 + 0.7 * q }; }
+    default: return still;
+  }
+}
+// Where particle i is at time t, around the player's middle (card-local px), and how visible.
+function particleAt(P, i, t) {
+  const r1 = hash01(i * 3 + 1), r2 = hash01(i * 3 + 2), r3 = hash01(i * 3 + 3), S = P.spread, v = P.speed;
+  switch (P.motion) {
+    case 'rise': case 'fall': {
+      const ph = (t * v * 0.12 + r1) % 1;
+      return { x: (r2 * 2 - 1) * S * 0.8 + 12 * Math.sin(t * v + r3 * 6.28), y: (P.motion === 'rise' ? 1 - 2 * ph : 2 * ph - 1) * S, a: Math.sin(ph * Math.PI) };
+    }
+    case 'orbit': {
+      const ang = r1 * 6.28 + t * v * 0.25 * (r2 > 0.5 ? 1 : -1), rad = S * (0.55 + 0.45 * r3);
+      return { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad * 0.55, a: 0.6 + 0.4 * Math.sin(t * v * 1.3 + r2 * 6.28) };
+    }
+    default:
+      return { x: (r1 * 2 - 1) * S + 18 * Math.sin(t * v * 0.6 + r2 * 6.28), y: (r2 * 2 - 1) * S + 14 * Math.cos(t * v * 0.5 + r3 * 6.28), a: 0.6 + 0.4 * Math.sin(t * v + r1 * 6.28) };
+  }
+}
 const norm = v => { const l = Math.hypot(v[0], v[1]) || 1; return [v[0] / l, v[1] / l]; };
 function mul(a, b) { const o = new Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; } return o; }
 const chain = (...ms) => ms.reduce(mul);
@@ -100,10 +135,10 @@ void main(){
 const FS_Q = `#version 300 es
 precision highp float;
 in vec2 vL; out vec4 o;
-uniform int uMode; uniform vec2 uHalf, uFb, uSOff, uLight; uniform float uRad, uA, uLod, uDim, uSBlur, uSA, uSheen, uSpec, uFrost, uDpr, uSdiv;
+uniform int uMode; uniform vec2 uHalf, uFb, uSOff, uLight; uniform float uRad, uA, uLod, uDim, uSBlur, uSA, uSheen, uSpec, uFrost, uDpr, uSdiv; uniform vec3 uSCol;
 uniform sampler2D uTex; uniform mat2 uAx; uniform vec4 uBand; uniform vec2 uCrop;
 // album art: depth blur (a real Gaussian), colour tint, a frame
-uniform float uBlur, uTexSize, uTintAmt, uFrame, uPixel; uniform vec3 uTint, uFrameCol; uniform int uFrameStyle;
+uniform float uBlur, uTexSize, uTintAmt, uFrame, uPixel; uniform vec3 uTint, uFrameCol; uniform int uFrameStyle; uniform vec4 uHue;
 // solid panels (skins, performance mode)
 uniform vec3 uTop, uBot, uEdge, uHi, uDark; uniform float uEdgeW, uBevel, uGloss, uScan, uTexMix; uniform int uHasTex, uTexMode;
 float sdr(vec2 p, vec2 h, float r){ r = min(r, min(h.x, h.y)); vec2 q = abs(p) - h + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
@@ -126,9 +161,9 @@ vec3 gauss(vec2 uv){
   return acc / ws;
 }
 void main(){
-  if (uMode == 0) {   // soft shadow
+  if (uMode == 0) {   // soft shadow (or, in a light colour, a glow)
     float d = sd(vL - uSOff);
-    o = vec4(0.0, 0.0, 0.0, uSA * uA * (1.0 - smoothstep(-uSBlur * 0.6, uSBlur, d))); return;
+    o = vec4(uSCol, uSA * uA * (1.0 - smoothstep(-uSBlur * 0.6, uSBlur, d))); return;
   }
   float d = sd(vL);
   float cov = clamp(0.5 - d / max(fwidth(d), 0.5), 0.0, 1.0);
@@ -199,6 +234,12 @@ void main(){
   c *= 1.0 - band * mix(0.14, 0.46, smoothstep(0.3, 0.85, lum));
   c *= 1.0 - 0.10 * smoothstep(0.55, 0.95, lum);           // very bright desktops: keep white text readable
   c = mix(c, uTint, uTintAmt) * 1.02;
+  // the user's own colour (Settings): it colours the glass but keeps every pixel's brightness,
+  // so the blur, light and depth stay and white text reads as before
+  if (uHue.a > 0.0) {
+    float lu = dot(c, vec3(0.2126, 0.7152, 0.0722)), hl = dot(uHue.rgb, vec3(0.2126, 0.7152, 0.0722));
+    c = mix(c, min(uHue.rgb * lu / max(hl, 0.05), vec3(1.0)), uHue.a);
+  }
   float rim = 1.0 - smoothstep(0.0, 2.2, e);
   float spec = rim * (0.2 + 0.75 * pow(max(facing, 0.0), 2.0) + 0.3 * pow(max(-facing, 0.0), 2.0));
   float bev = pow(k, 4.0) * pow(max(facing, 0.0), 2.0) * 0.22;
@@ -297,6 +338,10 @@ function panelOf(o, base) {
   };
 }
 const PANEL0 = { top: [0.17, 0.19, 0.24], bottom: [0.09, 0.1, 0.13], edge: [0.32, 0.35, 0.42], hi: [0.55, 0.6, 0.7], dark: [0, 0, 0], edgeW: 1, bevel: 0, gloss: 0, scan: 0 };
+// a skin's pictures: up to 8 decorations and 24 particles (SKINS.md)
+const DECO_MAX = 8, PART_MAX = 24;
+const DECO_ANCHORS = ['top', 'bottom', 'rail', 'wheel', 'player'];
+const DECO_ANIMS = ['bob', 'sway', 'spin', 'pulse', 'flicker', 'twinkle'];
 function resolveSkin(raw) {
   const d = raw && typeof raw === 'object' ? raw : {};
   const text = d.text || {}, card = d.card || {}, cover = d.cover || {}, glass = d.glass || {}, btn = d.button || {}, chip = d.chip || {};
@@ -316,9 +361,27 @@ function resolveSkin(raw) {
     card: { ...cardP, radius: num(card.radius, 30, 0, 80), scale: num(card.scale, 1, 0.6, 1.4), texFile: typeof card.texture === 'string' ? card.texture : null,
       texNormal: card.textureMode === 'normal', texPixels: !!card.texturePixels },
     // pictures the card in front wears (one, or a list): at its top edge, or its bottom edge
+    // where: on the front card ("top", "bottom"), by the play/pause button ("rail"), around the
+    // wheel ("wheel"), or as the whole player's shell ("player"); `behind` puts it under the cards
     decos: (Array.isArray(d.decoration) ? d.decoration : d.decoration ? [d.decoration] : [])
-      .filter(o => o && typeof o.image === 'string').slice(0, 4)
-      .map(o => ({ image: o.image, width: num(o.width, 140, 10, 400), x: num(o.x, 0, -300, 300), y: num(o.y, -30, -300, 300), bottom: o.anchor === 'bottom' })),
+      .filter(o => o && typeof o.image === 'string').slice(0, DECO_MAX)
+      .map(o => {
+        const anchor = DECO_ANCHORS.includes(o.anchor) ? o.anchor : 'top';
+        return { image: o.image, width: num(o.width, 140, 10, 900), x: num(o.x, 0, -600, 600), y: num(o.y, anchor === 'top' ? -30 : 0, -600, 600),
+          anchor, bottom: anchor === 'bottom', behind: !!o.behind, pixels: !!o.pixels, opacity: num(o.opacity, 1, 0, 1),
+          anim: DECO_ANIMS.includes(o.animation) ? o.animation : null, speed: num(o.speed, 1, 0.1, 4),
+          // the point it swings, spins or breathes around, as fractions of the picture (middle by default)
+          pivot: Array.isArray(o.pivot) ? [num(o.pivot[0], 0.5, 0, 1), num(o.pivot[1], 0.5, 0, 1)] : [0.5, 0.5],
+          // an animated picture plays again from its first frame when the song playing changes
+          restart: o.restart === 'song' };
+      }),
+    // small pictures drifting around the player (bubbles, sparks, snow)
+    particles: d.particles && typeof d.particles === 'object' && typeof d.particles.image === 'string' ? {
+      image: d.particles.image, count: Math.round(num(d.particles.count, 10, 1, PART_MAX)), size: num(d.particles.size, 14, 4, 80),
+      motion: ['rise', 'fall', 'drift', 'orbit'].includes(d.particles.motion) ? d.particles.motion : 'drift',
+      speed: num(d.particles.speed, 1, 0.1, 4), spread: num(d.particles.spread, 260, 40, 600), opacity: num(d.particles.opacity, 0.8, 0, 1),
+      behind: d.particles.behind !== false, pixels: !!d.particles.pixels,
+    } : null,
     cover: {
       radius: num(cover.radius, 14, 0, 60), frame: num(cover.frame, 0, 0, 20), frameCol: rgb(cover.frameColor, [0.8, 0.8, 0.82]),
       frameStyle: cover.frameStyle === 'chrome' ? 1 : cover.frameStyle === 'inset' ? 2 : 0, pixelate: num(cover.pixelate, 0, 0, 128),
@@ -339,12 +402,31 @@ function skinFile(skin, name) {
   const path = skin.folder + name;
   return (TAURI && TAURI.core.convertFileSrc ? TAURI.core.convertFileSrc(path, 'skipskin') : 'skipskin://localhost/' + path) + '?r=' + skin.rev;
 }
+// a vivid colour for a hue (degrees): HSL with saturation .9, lightness .62
+const hueRgb = h => [0, 8, 4].map(n => { const k = (n + h / 30) % 12; return 0.62 - 0.342 * Math.max(-1, Math.min(k - 3, 9 - k, 1)); });
+// With Windows' animations off, an animated picture (a flame, a bubble) shows its first frame, held still.
+function stillOf(url, done) {
+  const im = new Image();
+  im.crossOrigin = 'anonymous';
+  im.onload = () => {
+    try {
+      const c = document.createElement('canvas');
+      c.width = im.naturalWidth; c.height = im.naturalHeight;
+      c.getContext('2d').drawImage(im, 0, 0);
+      done(c.toDataURL());
+    } catch (e) { done(url); }
+  };
+  im.onerror = () => done(url);
+  im.src = url;
+}
 let fontSeq = 0;
 function applyLook(look) {
   if (!look || typeof look !== 'object') return;
   LOOK = { ...LOOK, ...look };
   const skin = look.skin || null;
   SK = resolveSkin(skin && skin.data);
+  // Liquid Glass in the user's own colour (Settings → Skin): a hue 0–360, or null for the skin's own look
+  SK.glass.hue = typeof LOOK.glass_hue === 'number' && SK.base === 'glass' ? [...hueRgb(LOOK.glass_hue), 0.45] : [0, 0, 0, 0];
   STYLE = STYLES[LOOK.style] || STYLES.wheel;
   U = (SIZE_U[LOOK.size] || SIZE_U.medium) * SK.card.scale;
   const perf = !!LOOK.perf;
@@ -363,10 +445,22 @@ function applyLook(look) {
   // what the front card wears (a skin's pictures, e.g. a hat)
   decoEls.forEach((el, i) => {
     const dd = SK.decos[i], url = dd && !perf ? skinFile(skin, dd.image) : null;
-    if (url) el.src = url; else el.removeAttribute('src');
+    // the same picture keeps playing where it is (a look change shouldn't replay an animation)
+    const same = url && url === decoUrls[i] && el.getAttribute('src');
+    decoUrls[i] = url;
+    if (!url) el.removeAttribute('src');
+    else if (!same && reduceMotion) stillOf(url, still => { if (decoUrls[i] === url) el.src = still; });
+    else if (!same) el.src = url;
+    if (dd) { (dd.behind ? under : ui).append(el); el.classList.toggle('pixels', dd.pixels); }
     el.style.visibility = 'hidden';
   });
   decoOn = SK.decos.length > 0 && !perf;
+  // the particles (none in performance mode)
+  const P = SK.particles, purl = P && !perf ? skinFile(skin, P.image) : null;
+  partEls.forEach((el, i) => {
+    if (purl && i < P.count) { el.src = purl; (P.behind ? under : ui).append(el); el.classList.toggle('pixels', P.pixels); } else el.removeAttribute('src');
+    el.style.visibility = 'hidden';
+  });
   rs.setProperty('--btn-ink', SK.button.icon || T.color);
   rs.setProperty('--chip-ink', SK.chipText || T.color); rs.setProperty('--chip-on-ink', SK.chipOnText || T.color);
   const sys = '"Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif';
@@ -428,6 +522,7 @@ function sleepGpu() {
 }
 
 const v3 = (u, c) => gl.uniform3f(u, c[0], c[1], c[2]);
+const BLACK = [0, 0, 0];
 function panelUniforms(q, p) {
   // performance mode keeps a skin's colours and outline, nothing more
   const lite = LOOK.perf;
@@ -475,7 +570,7 @@ function draw(F) {
     gl.uniform2f(q.uOff, mode === 0 ? it.off[0] : 0, mode === 0 ? it.off[1] : 0);
     gl.uniform1i(q.uMode, mode); gl.uniform2f(q.uHalf, it.half[0], it.half[1]);
     gl.uniform1f(q.uRad, it.rad); gl.uniform1f(q.uA, it.a);
-    if (mode === 0) { gl.uniform2f(q.uSOff, it.off[0], it.off[1]); gl.uniform1f(q.uSBlur, it.blur); gl.uniform1f(q.uSA, 1); }
+    if (mode === 0) { gl.uniform2f(q.uSOff, it.off[0], it.off[1]); gl.uniform1f(q.uSBlur, it.blur); gl.uniform1f(q.uSA, 1); v3(q.uSCol, it.col || BLACK); }
     else {
       gl.uniform2f(q.uLight, it.light[0], it.light[1]); gl.uniform1f(q.uSheen, it.sheen); gl.uniform1f(q.uDim, it.dim);
       gl.uniform1f(q.uSpec, it.spec || 1);
@@ -496,6 +591,7 @@ function draw(F) {
         gl.uniformMatrix2fv(q.uAx, false, it.ax.slice(0, 4)); gl.uniform4f(q.uBand, it.band[0], it.band[1], it.band[2], it.band[3]);
         gl.uniform1f(q.uFrost, it.frost);
         v3(q.uTint, SK.glass.tint); gl.uniform1f(q.uTintAmt, SK.glass.tintAmt);
+        gl.uniform4f(q.uHue, SK.glass.hue[0], SK.glass.hue[1], SK.glass.hue[2], SK.glass.hue[3]);
       }
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -596,6 +692,11 @@ function applyView(v) {
   if (state === 'hidden' || presence < 0.2) { ai = idx; setC(hx, idx); }
   else if (shift) { ai += shift; hx.x = hx.x.map(x => x + shift); }
   ai = clamp(Math.round(ai), 0, cols.length - 1);
+  // the song playing changed (a skip, a jump, the next song): skins can react (SKINS.md, "restart")
+  const act = v.sources.find(s => s.key === v.active), nowIt = act && Array.isArray(act.items) ? act.items.find(it => it.rel === 0) : null;
+  const sig = nowIt ? act.key + '' + nowIt.key : '';
+  if (sig && songSig && sig !== songSig) restartDecos();
+  if (sig) songSig = sig;
 }
 
 // ---------- the rail (DOM parts; the glass is drawn with the cards) ----------
@@ -604,6 +705,12 @@ const ICON = {
   next: '<svg viewBox="0 0 24 24"><path d="M15.6 5H18v14h-2.4zM5.4 5.7v12.6c0 .7.8 1.1 1.3.7l8.6-6.3a.9.9 0 0 0 0-1.4L6.7 5c-.5-.4-1.3 0-1.3.7z"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M7 4.9v14.2c0 .8.9 1.3 1.6.8l11-7.1a1 1 0 0 0 0-1.6l-11-7.1C7.9 3.6 7 4.1 7 4.9z"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><path d="M6.5 4.5h3.6v15H6.5zM13.9 4.5h3.6v15h-3.6z"/></svg>',
+  // the song buttons (Material icons, Apache 2.0)
+  like: '<svg viewBox="0 0 24 24"><path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"/></svg>',
+  liked: '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>',
+  link: '<svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>',
+  next_up: '<svg viewBox="0 0 24 24"><path d="M14 10H3v2h11v-2zm0-4H3v2h11V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM3 16h7v-2H3v2z"/></svg>',
+  spotify: '<svg viewBox="0 0 24 24"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg>',
 };
 const chipEls = Array.from({ length: RAIL.maxChips }, () => {
   const el = document.createElement('div'); el.className = 'chip';
@@ -617,6 +724,27 @@ const btnEls = BTNS.map(id => {
   const el = document.createElement('div'); el.className = 'ctl'; ui.append(el);
   return { id, el, s: el.style, icon: null, shown: false };
 });
+// a short message from the app after an action ("Spotify volume 55%"), shown in the note slot
+let toastText = '', toastAt = -10;
+// the song buttons under play/pause, for the song in front (extras.rs). The app says which work
+// for each source (src.acts); the others are dimmed, and clicking one says why.
+const ACTS = ['like', 'link', 'next', 'spotify'];
+const ACT_ICON = { like: 'like', link: 'link', next: 'next_up', spotify: 'spotify' };
+const ACT_LABEL = { like: 'Like', link: 'Copy link', next: 'Play next', spotify: 'Continue on Spotify' };
+const ACT = { r: 13, step: 32 };
+const actEls = ACTS.map(id => {
+  const el = document.createElement('div'); el.className = 'ctl small'; ui.append(el);
+  return { id, el, s: el.style, icon: null, shown: false };
+});
+function songAction(what) {
+  const c = curSrc(); if (!c) return;
+  const item = c.byRel.get(clamp(Math.round(c.tgt), c.relMin, c.relMax)); if (!item) return;
+  pressAt.set('act:' + what, nowS());
+  invoke('song_action', { source: c.key, item: item.key, what });
+}
+// last frame's click targets, to tell what the pointer is over when the wheel turns
+let lastHits = [];
+const overHit = id => { const h = lastHits.find(x => x.id === id); return !!h && inRect(h.r, m); };
 const noteEl = document.createElement('p'); noteEl.className = 'note'; ui.append(noteEl);
 // "Back to …" under the play/pause button: the song that was playing before the last skip
 const BACK = { h: 21 };
@@ -626,7 +754,25 @@ ui.append(backEl);
 const backImg = backEl.querySelector('img'), backTtl = backEl.querySelector('.ttl');
 let backKey = null, backShown = false;
 backImg.onerror = () => { backImg.style.visibility = 'hidden'; };
-const decoEls = Array.from({ length: 4 }, () => { const el = document.createElement('img'); el.className = 'deco'; el.alt = ''; ui.append(el); return el; });
+const under = document.getElementById('under');
+const newDeco = () => { const el = document.createElement('img'); el.className = 'deco'; el.alt = ''; ui.append(el); return el; };
+const decoEls = Array.from({ length: DECO_MAX }, newDeco);
+const decoUrls = [];
+// A new address makes the browser play an animated picture from its first frame again.
+let restartSeq = 0, songSig = '';
+function restartDecos() {
+  if (reduceMotion) return;
+  decoEls.forEach((el, i) => {
+    const dd = SK.decos[i], url = decoUrls[i];
+    if (!dd || !dd.restart || !url) return;
+    const next = url + (url.includes('?') ? '&' : '?') + 'play=' + (++restartSeq);
+    // load the new copy first: swapping straight away blanks the picture until it arrives
+    const im = new Image();
+    im.onload = () => { if (decoUrls[i] === url) el.src = next; };
+    im.src = next;
+  });
+}
+const partEls = Array.from({ length: PART_MAX }, newDeco);
 let decoOn = false;
 let noteText = null, noteShown = false;
 const hov = new Map(), pressAt = new Map();
@@ -643,6 +789,7 @@ function rectOf(M, hw, hh) {
   return [x0, y0, Math.max(...xs) - x0, Math.max(...ys) - y0];
 }
 const inRect = (r, p) => p[0] >= r[0] && p[0] <= r[0] + r[2] && p[1] >= r[1] && p[1] <= r[1] + r[3];
+const rectsMeet = (a, b) => a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3];
 
 // clickable areas go to the app, which takes those clicks while the overlay is open
 let hitsSent = '', hitsAt = 0;
@@ -663,12 +810,116 @@ function sendHits(list, t) {
 //   card     card size [half width, half height]; cover: whether it shows album art
 //   span     how far from the middle songs are drawn; band: where its words sit on the glass
 //   text     where the title and artist sit on the card
-//   place(c) the card's matrix and depth, from c: { d, ad, Mcol, fx, fy, fz, push, hm, cc, nb, eo, onlyV, onlyH, colZ }
+//   place(c) the card's matrix and depth, from c: { d, ad, Mcol, fx, fy, fz, push, hm, cc, nb, eo, onlyV, onlyH, colZ, col, item, t, id, hv }
 //   words(dd) optional: how visible a card's words are (default: by axis)
 //   reachY   optional: how far it reaches up and down from the song in front (default 260)
+//   reachX   optional: how far it reaches toward the cursor from the song in front
+//   hitSpan  optional: how far from the middle cards take clicks (default 1.25)
+//   occlude  optional: words a nearer card covers fade out (dd.w.cover, for words())
+//   halo     optional: how strong a soft light behind the card in front is
+// place() may also return dof (0 sharp … 1 farthest back) for depth cues by depth instead of by
+// distance from the middle, and wa and pick (how visible its words are, how much it is pointed
+// at) for words()
 // the orbit: a ring with a radius of 310 (its middle is about where the cursor is) and room for 11
 // songs, tilted 45° away from you
 const ORBIT = { r: 310, step: 2 * Math.PI / 11, cos: Math.cos(45 * DEG), sin: Math.sin(45 * DEG) };
+// Freaky Random: the queue as a loose spiral round the card in front, drawn anew at every
+// opening. The next songs curl away below it on the cursor side, each a little further, deeper
+// and smaller, so one notch visibly pulls in the nearest card; the earlier songs curl away above
+// it, further back. Card-local px as seen (rail side to the right): the room it has toward the
+// cursor, toward the rail and up and down, and how far back it reaches (the front card is the
+// focus: cards further back blur)
+const CLOUD = { left: 450, right: RAIL_X + RAIL.w / 2, y: 360, deep: 600, span: 5.8 };
+const TITLE_BOX = [0, 118, CARD[0] + 14, 52];   // the front card's words, with a margin
+const knots = new Map(), cloud = new Map();     // this opening's spiral, and each song's own tilt
+const segs = new Map();                         // the path between each two spots, measured
+let cloudSeed = 1, cloudT0 = 0, dirT = 1;       // this opening's seed and start, the way you last scrolled
+let cloudPt = null;                             // where the pointer was when it opened, until it moves
+let cloudSeedSet = null;                        // a fixed seed, for checks only (__skipdat.seed)
+const dirC = mk(2, 1);
+// a steady random sequence for one song in this opening (mulberry32)
+function rngFor(key) {
+  let h = cloudSeed;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  return () => {
+    h = (h + 0x6D2B79F5) | 0;
+    let x = Math.imul(h ^ (h >>> 15), 1 | h);
+    x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// a soft wall: x moves freely until within m of a limit, then eases into it, never past it
+const wall = (x, lo, hi, m) => (x > hi - m ? hi - m * Math.exp((hi - m - x) / m) : x < lo + m ? lo + m * Math.exp((x - lo - m) / m) : x);
+// a spring let go at s = 0 (seconds): goes a little past 1, then settles there
+const spring = s => (s <= 0 ? 0 : 1 - Math.exp(-7.5 * s) * (Math.cos(13 * s) + 0.577 * Math.sin(13 * s)));
+// a quick dip and back, s seconds after something happened (a notch, a press)
+const blip = s => smoothstep(0, 0.05, s) * (1 - smoothstep(0.08, 0.3, s));
+// How far back and how big a card is, u songs from the front: both ease away from the front card
+// (flat as it passes through, so it never bulges) and keep on further down the queue; the earlier
+// songs sit further back. [depth, size]
+function cloudDepth(u) {
+  const n = Math.abs(u), next = u >= 0, z1 = next ? 40 : 320, zs = next ? 80 : 90, s1 = next ? 0.58 : 0.48, ss = next ? 0.05 : 0.04;
+  // 0 at the front, 1 at the first spot, leaving it at slope m
+  const ease = m => (n >= 1 ? 1 + m * (n - 1) : (3 - m) * n * n + (m - 2) * n * n * n);
+  return [-z1 * ease(zs / z1), Math.max(0.25, 1 - (1 - s1) * ease(ss / (1 - s1)))];
+}
+// The spot u songs from the front (u > 0 the next ones, u < 0 the earlier ones) as seen, on a
+// ring round the front card that is open on the rail's side: [x, y, extra depth]. Each is a
+// little uneven (more so further down the queue), and the card there (even lifted under the
+// pointer, tilted and floating) is never on the front card's words or the rail (at its tallest:
+// every app, the song buttons, "Back to" and a note), and stays in its room.
+function cloudKnot(u) {
+  let kn = knots.get(u);
+  if (kn) return kn;
+  if (!u) kn = [0, 0, 0];
+  else {
+    // this opening's ring: where it starts, how fast it turns, and a lumpy, uneven edge
+    const A = rngFor('arms'), a0 = lerp(0, 16, A()) * DEG, step = lerp(32, 39, A()) * DEG, lump = A() * 6.28;
+    const rnd = rngFor('knot' + u), n = Math.abs(u) - 1, next = u > 0;
+    // the next songs go from the cursor's side down and round under the front card, the earlier
+    // ones (a little further out) up and over it; the very next one is the nearest of all
+    const th = Math.PI - Math.sign(u) * ((next ? a0 : a0 + 26 * DEG) + step * n * (1 - 0.05 * n) + (rnd() - 0.5) * (5 + 3 * n) * DEG);
+    const wob = 1 + (0.07 * Math.sin(3 * th + lump) + (rnd() - 0.5) * 0.06) * clamp01(n - 1);
+    let x = ((next ? 232 : 278) + (next ? 45 : 30) * n) * wob * Math.cos(th), y = (262 + 20 * n) * wob * Math.sin(th);
+    // a little depth of its own, too little to change the order of sizes
+    const dz = (rnd() - 0.5) * 30, [z0, s] = cloudDepth(u), z = z0 + dz, k = PD / (PD - z * U);
+    // how big it is, and how big it gets lifted under the pointer, tilted and floating
+    const w0 = CARD[0] * s * k, h0 = CARD[1] * s * k, hw = w0 * 1.15 + 8, hh = h0 * 1.15 + 8;
+    // off the front card's words: outward from the middle, as little as it takes
+    const [, ty, tw, th2] = TITLE_BOX, need = Math.min(x ? (tw + hw) / Math.abs(x) : 1e9, y > 0 ? (ty + th2 + hh) / y : 1e9);
+    if (Math.abs(x) < tw + hw && y + hh > ty - th2 && y - hh < ty + th2) { x *= need; y *= need; }
+    const railY = (Math.min(V.sources.length, RAIL.maxChips) * RAIL.chipStep + 196) / 2 + 24 + hh;
+    if (x + hw > RAIL_X - RAIL.w / 2 - 14 && Math.abs(y) < railY) y = Math.sign(y || -1) * railY;
+    // in its room as it rests, with room to float and to spring out (place() keeps the whole card in)
+    kn = [clamp(x, -CLOUD.left + w0 + 24, CLOUD.right - w0 - 24), clamp(y, -CLOUD.y + h0 + 26, CLOUD.y - h0 - 26), dz];
+  }
+  knots.set(u, kn);
+  return kn;
+}
+// The path between spot i and the next, t from 0 to 1: a smooth curve through the spots
+// (Catmull-Rom), so cards glide from spot to spot and never stop or kink on the way; it swings
+// wider through the front, so the next song comes in on an arc
+function cloudCurve(i, t) {
+  const P = [i - 1, i, i + 1, i + 2].map(cloudKnot), tan = (j, a, c) => (a - c) * (j ? 0.5 : 1.1);
+  const h = [2 * t ** 3 - 3 * t * t + 1, t ** 3 - 2 * t * t + t, 3 * t * t - 2 * t ** 3, t ** 3 - t * t];
+  return P[0].map((_, k) => h[0] * P[1][k] + h[1] * tan(i, P[2][k], P[0][k]) + h[2] * P[2][k] + h[3] * tan(i + 1, P[3][k], P[1][k]));
+}
+// Where a card is u songs from the front: along the curve at an even pace, so it never speeds up
+// halfway between two spots
+function onCloud(u) {
+  const i = Math.floor(u), s = segs.get(i) || [0];
+  if (s.length === 1) { for (let k = 1, p = cloudCurve(i, 0); k <= 16; k++) { const q = cloudCurve(i, k / 16); s.push(s[k - 1] + Math.hypot(q[0] - p[0], q[1] - p[1])); p = q; } segs.set(i, s); }
+  const d = (u - i) * s[16];
+  let k = 1; while (k < 16 && s[k] < d) k++;
+  return cloudCurve(i, (k - 1 + (d - s[k - 1]) / ((s[k] - s[k - 1]) || 1)) / 16);
+}
+// a song's own small tilt and float, for this opening
+function cloudLook(col, item) {
+  const key = col.key + '|' + item.key;
+  let lk = cloud.get(key);
+  if (!lk) { const rnd = rngFor(key); lk = { rz: (rnd() - 0.5) * 4 * DEG, ry: (rnd() - 0.5) * 10 * DEG, ph: rnd() * 6.28 }; cloud.set(key, lk); }
+  return lk;
+}
 const STYLES = {
   // the 1.0 look: a drum turning toward you (vertical) or a wheel turning sideways (horizontal)
   wheel: {
@@ -737,6 +988,52 @@ const STYLES = {
     },
     words: dd => 1 - smoothstep(2.2, 4.4, dd.ad),
   },
+  // Freaky Random: one big card in front, the rest of the queue on a loose spiral round it; each
+  // notch moves every card one spot along, so the next one glides in on a curve
+  random: {
+    axis: () => 'v', card: CARD, cover: true, span: CLOUD.span, band: [80, 200],
+    text: { x: -107, ty: 93, ay: 120 },
+    hitSpan: CLOUD.span, halo: 0.16,
+    // its room, plus a few pixels for the whole player's own float and tilt
+    get reachX() { return CLOUD.left + 10 / U; },
+    get reachY() { return CLOUD.y + 14 / U; },
+    place(c) {
+      const [px, py, jz] = onCloud(c.d), [dz, ps] = cloudDepth(c.d), pz = dz + jz;
+      const lk = cloudLook(c.col, c.item), mo = FEEL.float;
+      const k = Math.min(c.ad, 1), e = k * k * (3 - 2 * k);   // 0: in front, 1: out in the cloud
+      // opening: out from behind the front card, nearest first, a little past their spots and
+      // back; closing: back in, furthest first (by presence, so a reopening halfway picks up)
+      const q = mo ? spring(c.t - cloudT0 - 0.05 - 0.035 * c.ad) * smoothstep(0.04 * c.ad, 0.04 * c.ad + 0.4, presence) : 1, q1 = Math.min(q, 1);
+      // feedback: the card under the pointer lifts and sharpens, a clicked card presses in, the
+      // card in front gives a small pulse at each notch, and the next one the way you scroll leans in
+      // (a card that just happens to be under the pointer when it opens isn't pointed at)
+      const pick = cloudPt ? 0 : c.hv * e, lift = pick * mo, press = mo * blip(c.t - (pressAt.get(c.id) || -10)), notch = mo * (1 - e) * blip(c.t - lastStep);
+      const dir = val(dirC), lean = mo * (Math.max(0, 1 - Math.abs(c.d - 1)) * (1 + dir) + Math.max(0, 1 - Math.abs(c.d + 1)) * (1 - dir)) / 2;
+      // cards coming into view (or going) grow from their spot as they fade
+      const edge = clamp01((CLOUD.span - 0.8 - c.ad) / 0.9), fl = mo * e;
+      const out = q * (1 - 0.7 * c.cc * c.nb);
+      let x = px * out + 6 * Math.sin(c.t * 0.6 + lk.ph) * fl;
+      let y = py * out + 8 * Math.sin(c.t * 0.8 + 1.3 * lk.ph) * fl + c.fy * (1 - e);
+      const z = pz - 220 * (1 - q1) * e - c.push + c.fz * 0.3 * (1 - e) + 110 * lift - 40 * press;
+      // the card in front pops a little as the window opens and closes, done before the others land
+      const pop = 1 + 0.06 * mo * Math.sin(Math.PI * smoothstep(0.2, 0.75, presence)) * (1 - e);
+      const sc = ps * (1 - 0.5 * (1 - q1) * e) * pop * (1 - 0.025 * notch) * (1 + 0.1 * lift) * (1 - 0.07 * press) * lerp(0.8, 1, edge);
+      const dof = clamp01(-pz / CLOUD.deep) * e * (1 - 0.7 * lift) * (1 - 0.4 * lean);
+      // words: the front card's fade out on the way, a cloud card's show once it has landed
+      const wa = 1 - smoothstep(0, 0.35, k) + smoothstep(0.65, 1, k) * smoothstep(0.7, 1, q1) * lerp(1, 0.7, dof);
+      const kp = PD / (PD - z * U);   // perspective, so spots are where they are seen
+      // the whole card, as drawn (tilted, lifted, springing out), stays in the room, easing to a
+      // stop at its edge rather than hitting it
+      const hw = CARD[0] * sc * kp, hh = CARD[1] * sc * kp, tz = Math.abs(lk.rz);
+      x = wall(x, -CLOUD.left + hw + hh * tz + 4, CLOUD.right - hw - hh * tz - 4, 14);
+      y = wall(y, -CLOUD.y + hh + hw * tz + 4, CLOUD.y - hh - hw * tz - 4, 14);
+      return { M: chain(c.Mcol, Tm(val(sideC) * x / kp, y / kp, z), RY(val(sideC) * (lk.ry * e * (1 - lift) - 9 * DEG * lean)), RZ(lk.rz * e * (1 - lift)), Sm(sc, sc, 1)),
+        z: z + c.colZ, dof, wa, pick };
+    },
+    // the card pointed at always shows its name
+    words: dd => Math.max(dd.wa * (1 - dd.w.cover), dd.pick),
+    occlude: true,
+  },
 };
 let STYLE = STYLES.wheel;
 
@@ -767,8 +1064,10 @@ function targets() {
   const reach = (205 + RAIL_X + RAIL.w / 2 + 24) * U;
   side = home[0] + reach < W ? 1 : -1;
   const pill = [clamp(home[0] + side * 158 * U, 140 * U, W - 140 * U), clamp(home[1] - 56 * U, 50 * U, H - 50 * U)];
-  const ry = (STYLE.reachY || 260) * U;
-  const vert = [home[0] + side * 205 * U, clamp(home[1] - 190 * U, Math.min(ry, H / 2), Math.max(H - ry, H / 2))];
+  const ry = (STYLE.reachY || 260) * U, rx = (STYLE.reachX || 0) * U;
+  // a style reaching toward the cursor (Freaky Random) keeps that side on screen too
+  const vx = side > 0 ? Math.max(home[0] + 205 * U, rx + 8) : Math.min(home[0] - 205 * U, W - rx - 8);
+  const vert = [vx, clamp(home[1] - 190 * U, Math.min(ry, H / 2), Math.max(H - ry, H / 2))];
   // horizontal: centred over the cursor, above it (below it when there is no room above)
   const above = home[1] - (CARD[1] + 46 + 20 + 58) * U;
   const roomAbove = above - (CARD[1] + 44 + 40) * U > 8;
@@ -797,9 +1096,12 @@ function resetHidden() {
   cols.forEach(c => c.words.forEach(hideWords));
   chipEls.forEach(c => { c.s.visibility = 'hidden'; c.shown = false; });
   btnEls.forEach(b => { b.s.visibility = 'hidden'; b.shown = false; });
+  lastHits = []; toastText = '';
+  actEls.forEach(b => { b.s.visibility = 'hidden'; b.shown = false; });
   noteEl.style.visibility = 'hidden'; noteShown = false;
   backEl.style.visibility = 'hidden'; backShown = false;
   decoEls.forEach(el => { el.style.visibility = 'hidden'; });
+  partEls.forEach(el => { el.style.visibility = 'hidden'; });
   eqEl.style.opacity = 0;
   tSnap = tSnapFallback;
   hitsSent = '';
@@ -834,18 +1136,26 @@ listen('lg-show', d => {
     const activeI = Math.max(0, cols.findIndex(c => c.key === V.active));
     ai = activeI; setC(hx, activeI);
     setC(pres, 0); setC(pill, 0); setC(cm, 0); presT = 1; pillT = 0; cmT = 0; absorb = null;
+    knots.clear(); segs.clear(); cloud.clear(); cloudSeed = cloudSeedSet ?? (Math.random() * 4294967296) >>> 0; cloudT0 = nowS(); cloudPt = m.slice();   // Freaky Random: a new spiral every opening
     snapAnchors();
     state = 'browse';
     startLoop();
   } else resumeBrowse();
 });
-listen('lg-cursor', d => { m = [d.x / dpr, d.y / dpr]; });
+listen('lg-cursor', d => { m = [d.x / dpr, d.y / dpr]; if (cloudPt && Math.hypot(m[0] - cloudPt[0], m[1] - cloudPt[1]) > 8) cloudPt = null; });
 function wheelStep(steps) {
   if (state === 'hidden' || !cols.length) return;
   resumeBrowse();
   const c = curCol();
+  // over the play/pause button the wheel is that app's volume: rolled away from you is louder
+  if (c.key !== 'none' && overHit('ctl:toggle')) { invoke('set_volume', { source: c.key, steps: -steps }); return; }
+  // over the song playing (in front) it jumps 10 s a notch within it: toward you is later
+  const now = c.byRel.get(0);
+  if (c.key !== 'none' && now && Math.round(c.tgt) === 0 && overHit('card:' + c.key + '|' + now.key)) {
+    invoke('seek', { source: c.key, secs: steps * 10 }); return;
+  }
   c.tgt = clamp(Math.round(c.tgt) + steps, c.selMin - 1, c.selMax + 1);   // exactly one song per notch
-  lastStep = nowS(); dirty = true;
+  lastStep = nowS(); dirty = true; dirT = Math.sign(steps) || dirT;
 }
 listen('lg-wheel', wheelStep);
 function switchTo(i, viaKeys) {
@@ -873,11 +1183,12 @@ invoke('get_look').then(l => { if (l) applyLook(l); });
 listen('lg-click', id => {
   if (state !== 'browse' || typeof id !== 'string') return;
   if (id.startsWith('ctl:')) control(id.slice(4));
+  else if (id.startsWith('act:')) songAction(id.slice(4));
   else if (id.startsWith('src:')) { const i = cols.findIndex(c => c.key === id.slice(4)); if (i >= 0) switchTo(i, false); }
   else if (id.startsWith('card:')) {
     const k = id.slice(5), cut = k.lastIndexOf('|');
     const c = cols.find(x => x.key === k.slice(0, cut)), item = c && c.items.find(i => i.key === k.slice(cut + 1));
-    if (c && item && c.key !== 'none') playItem(c, item);
+    if (c && item && c.key !== 'none') { pressAt.set(id, nowS()); playItem(c, item); }
   }
 });
 listen('lg-commit', () => {
@@ -894,6 +1205,7 @@ listen('lg-commit', () => {
   state = 'commit';
 });
 listen('lg-cancel', () => startAbsorb());
+listen('lg-toast', text => { toastText = String(text || ''); toastAt = nowS(); });
 listen('lg-force-hide', () => { if (state !== 'hidden') resetHidden(); });
 listen('lg-toggle', () => { if (state !== 'hidden') control('toggle'); });
 listen('lg-media', v => { if (state === 'browse' || state === 'hidden') applyView(v); else pendingV = v; });
@@ -951,7 +1263,7 @@ function render(nowMs) {
     const h = Math.min(rem, 1 / 240); rem -= h;
     cols.forEach(c => stepC(c.wheel, rubber(c.tgt, c.selMin, c.selMax), FEEL.wheelOmega, h, FEEL.topSpeed));
     stepC(hx, rubber(ai, 0, n - 1), 16, h, 12);
-    stepC(pres, presT, 12, h); stepC(pill, pillT, 9, h); stepC(cm, cmT, 14, h); stepC(sideC, side, 10, h); stepC(oriC, oriT, 7, h);
+    stepC(pres, presT, 12, h); stepC(pill, pillT, 9, h); stepC(cm, cmT, 14, h); stepC(sideC, side, 10, h); stepC(oriC, oriT, 7, h); stepC(dirC, dirT, 8, h);
     stepC(anc.sx, sx, 9, h); stepC(anc.sy, sy, 9, h); stepC(anc.px, px, 9, h); stepC(anc.py, py, 9, h);
     const a2 = 1 - Math.exp(-h / 0.45);
     lpSlow[0] += (m[0] - lpSlow[0]) * a2; lpSlow[1] += (m[1] - lpSlow[1]) * a2;
@@ -1021,42 +1333,47 @@ function render(nowMs) {
       const lag = FEEL.trail * Math.min(Math.abs(d0), 2) * (1 - 0.7 * fast);
       const d = rel - pAt(col, t - lag), ad = Math.abs(d);
       const nb = smoothstep(0.3, 0.6, ad), hm = chosen ? mp * (1 - nb) : 0;
-      // depth: songs away from the middle fade (Settings → Depth: fade)
-      const fadeK = 1 - LOOK.depth_fade * 0.78 * smoothstep(0.45, span - 0.6, ad) * (1 - hm);
-      const a = clamp01((span - 0.8 - ad) / 0.9) * alphaP * colA * (rel === 0 ? 1 : colW) * (1 - cc * nb) * fadeK;
-      if (a < 0.003) continue;
       const push = 220 * cc * nb;
       const fl = (1 - hm) * FEEL.float * (1 - 0.6 * fast);
       const fx = -Math.sin(d * 0.9) * FEEL.fan * (1 - hm) * (st === STYLES.wheel ? 1 : 0.4);
       const fy = 6 * Math.sin(t * 1.1 - d * 0.6 - j * 0.8) * fl, fz = 8 * Math.sin(t * 0.9 - d * 0.6 - j * 0.8) * fl;
-      const { M, z } = st.place({ d, ad, Mcol, fx, fy, fz, push, hm, cc, nb, eo, onlyV, onlyH, colZ });
+      const cardId = 'card:' + col.key + '|' + item.key;
+      const hv = browsing && j === cI ? (hov.get(cardId) || 0) : 0;
+      const pl = st.place({ d, ad, Mcol, fx, fy, fz, push, hm, cc, nb, eo, onlyV, onlyH, colZ, col, item, t, id: cardId, hv }), { M, z } = pl;
+      // depth cues go by distance from the middle, or by the style's own depth of field
+      const dof = pl.dof, da = dof === undefined ? ad : dof * 2;
+      // depth: songs away from the middle fade (Settings → Depth: fade)
+      const fadeK = 1 - LOOK.depth_fade * 0.78 * (dof === undefined ? smoothstep(0.45, span - 0.6, ad) : dof * 0.75) * (1 - hm);
+      const a = clamp01((span - 0.8 - ad) / 0.9) * alphaP * colA * (rel === 0 ? 1 : colW) * (1 - cc * nb) * fadeK;
+      if (a < 0.003) continue;
       const half = [lerp(card[0], PILL[0], hm), lerp(card[1], PILL[1], hm)], rad = lerp(Math.min(SK.card.radius, card[1]), 34, hm);
       const ch = lerp(COVER, 24, hm), crad = lerp(SK.cover.radius, 11, hm);
       const Mc = chain(M, Tm(lerp(0, -98, hm), lerp(COVER_Y, 0, hm), 6));
       // a song the player can't go back (or on) to: shown, not reachable
       const out = rel < col.selMin || rel > col.selMax;
-      const dim = Math.min(ad * 0.24, 0.5) + 0.3 * (1 - colW) + (col.src.playing || rel !== 0 ? 0 : 0.08) + (out ? 0.25 : 0);
+      const dim = Math.min(da * 0.24, 0.5) + 0.3 * (1 - colW) + (col.src.playing || rel !== 0 ? 0 : 0.08) + (out ? 0.25 : 0);
       const sheen = sheen0 + (hm > 0 ? sweep * 2.6 : 0);
-      const cardId = 'card:' + col.key + '|' + item.key;
-      const hv = browsing && j === cI ? (hov.get(cardId) || 0) : 0;
       const parts = [];
       if (shadowK > 0) parts.push({ k: 'shadow', M, half, rad, off: [0, 14], blur: 30, a: 0.2 * a * shadowK });
       parts.push({ k: 'copy' });
       parts.push({ k: 'glass', M, half, rad, a, ax: aff(M, 0, 0, 1), light: Lgt, sheen, dim: dim * (1 - 0.5 * hv), spec: 1 + 0.7 * pulse * colW * (1 - nb) + 0.35 * hv,
         band: [lerp(st.band[0], -50, hm), lerp(st.band[1], 50, hm), 8, lerp(3.8, 3.2, hm)],
-        frost: (lerp(1.4, 3.2, hm) + ad * 0.6 * (0.3 + LOOK.depth_blur) + fast * 0.5 + (1 - colW) * 0.6) * SK.glass.frost, panel: SK.card });
+        frost: (lerp(1.4, 3.2, hm) + da * 0.6 * (0.3 + LOOK.depth_blur) + fast * 0.5 + (1 - colW) * 0.6) * SK.glass.frost, panel: SK.card });
       if (st.cover || hm > 0.02) {
         if (shadowK > 0) parts.push({ k: 'shadow', M: Mc, half: [ch, ch], rad: crad, off: [0, 6], blur: 10, a: 0.28 * a * (st.cover ? 1 : hm) * shadowK });
         // depth: a real Gaussian blur on the art away from the middle (Settings → Depth: blur)
-        const blurUv = perf ? 0 : LOOK.depth_blur * (smoothstep(0.3, 2.4, ad) * 0.075 + fast * 0.025) * (1 - hm);
+        const blurUv = perf ? 0 : LOOK.depth_blur * ((dof === undefined ? smoothstep(0.3, 2.4, ad) : dof * 2.4) * 0.075 + fast * 0.025) * (1 - hm);
         parts.push(...coverItems(Mc, [ch, ch], crad, a * (st.cover ? 1 : hm), item.art, 0, dim, Lgt, sheen, t, blurUv, SK.cover.frame * (1 - hm)));
       }
-      drawn.push({ z, w: wordsFor(col, item), d, ad, a, hm, M, colW, rel, chosen, col, item, cardId, items: parts });
+      drawn.push({ z, w: wordsFor(col, item), d, ad, a, hm, M, colW, rel, chosen, col, item, cardId, dof, wa: pl.wa, pick: pl.pick, items: parts });
     }
   });
   drawn.sort((a1, a2) => a1.z - a2.z);
   const items = [];
   if (drawn.length && shadowK > 0) items.push({ k: 'shadow', M: R, half: [lerp(150, 380, eo), lerp(220, 150, eo)], rad: 80, off: [0, 0], blur: 170, a: 0.10 * alphaP * (1 - mp) * shadowK });
+  // a style's soft light behind the card in front, so it stands out from the rest
+  const lead = st.halo && shadowK > 0 ? drawn.find(dd => dd.col === cols[cI] && dd.ad < 0.5) : null;
+  if (lead) items.push({ k: 'shadow', M: lead.M, half: [card[0] * 1.1, card[1] * 1.1], rad: 60, off: [0, 0], blur: 90, a: st.halo * lead.a * (1 - 2 * lead.ad) * (1 - mp) * shadowK, col: [1, 1, 1] });
   drawn.forEach(dd => items.push(...dd.items));
 
   // ---- the rail: sources and transport, beside the wheel on the side away from the cursor ----
@@ -1064,17 +1381,27 @@ function render(nowMs) {
   const srcs = V.sources.slice(0, RAIL.maxChips);
   const railA = alphaP * (1 - mp) * (1 - cc) * (srcs.length ? 1 : 0);
   const cur = cols[cI] && cols[cI].key !== 'none' ? cols[cI] : null;
-  const note = cur ? noteFor(cur.src) : '';
+  // the note slot: what the app just did (for a moment), else the source's own note
+  const actHover = cur ? ACTS.find(a => (hov.get('act:' + a) || 0) > 0.5) : null;
+  const actAble = a => !!(cur && Array.isArray(cur.src.acts) && cur.src.acts.includes(a));
+  // only the source's own note sizes the rail: a passing message (after an action, or a song
+  // button's name while pointed at) uses the same slot without moving anything, so the button
+  // under the pointer never slides away
+  const srcNote = cur ? noteFor(cur.src) : '';
+  const note = toastText && t - toastAt < 2.2 ? toastText
+    : actHover ? ACT_LABEL[actHover] + (actAble(actHover) ? '' : ': not for ' + cur.src.name)
+    : srcNote;
   const back = V.back && cur && V.back.source === cur.key ? V.back : null;
   const backH = back ? BACK.h * 2 + 12 : 0;
-  const chipsH = srcs.length * RAIL.chipStep - 8, railH = chipsH + 18 + RAIL.btnR * 2 + backH + (note ? 52 : 0);
+  const actH = cur ? ACT.r * 2 + 14 : 0;
+  const chipsH = srcs.length * RAIL.chipStep - 8, railH = chipsH + 18 + RAIL.btnR * 2 + actH + backH + (srcNote ? 52 : 0);
   const top = -railH / 2;
   const rx0 = val(sideC) * RAIL_X;
   // where each part of the rail sits, in both layouts
   // a skin's decoration on the front card: the row of names and the buttons make room
   let decoTop = 0, decoBot = 0;
   if (decoOn) decoEls.forEach((el, i) => {
-    const dc = SK.decos[i]; if (!dc || !el.naturalWidth) return;
+    const dc = SK.decos[i]; if (!dc || !el.naturalWidth || (dc.anchor !== 'top' && dc.anchor !== 'bottom')) return;
     const dh = el.naturalHeight * dc.width / el.naturalWidth;
     if (dc.bottom) decoBot = Math.max(decoBot, dc.y + dh / 2); else decoTop = Math.max(decoTop, dh / 2 - dc.y);
   });
@@ -1082,8 +1409,9 @@ function render(nowMs) {
   const chipHalf = lerp(RAIL.w / 2, HRAIL.chipW / 2, eo);
   const by = lerp(top + chipsH + 18 + RAIL.btnR, HRAIL.btnY + decoBot, eo);
   const btnAt = k => [lerp(rx0 + (k - (BTNS.length - 1) / 2) * 44, (k - (BTNS.length - 1) / 2) * HRAIL.btnStep, eo), by];
-  const backAt = [lerp(rx0, 0, eo), by + RAIL.btnR + 12 + BACK.h];
-  const noteAt = [lerp(rx0, 0, eo), by + RAIL.btnR + 30 + backH];
+  const actAt = k => [lerp(rx0 + (k - (ACTS.length - 1) / 2) * ACT.step, (k - (ACTS.length - 1) / 2) * (ACT.step + 4), eo), by + RAIL.btnR + 14 + ACT.r];
+  const backAt = [lerp(rx0, 0, eo), by + RAIL.btnR + 12 + BACK.h + actH];
+  const noteAt = [lerp(rx0, 0, eo), by + RAIL.btnR + 30 + backH + actH];
   const railItems = [];
   let railDrawn = false;
   if (railA > 0.003) {
@@ -1129,6 +1457,26 @@ function render(nowMs) {
       b.s.opacity = railA * (able ? lerp(0.86, 1, hv) : 0.35);
       b.s.transform = 'matrix(' + aff(M, -9 * big, -9 * big, big).join(',') + ')';
     });
+    if (cur) ACTS.forEach((id, k) => {
+      const [ax, ay] = actAt(k);
+      const M = chain(R, Tm(ax, ay, 0)), hid = 'act:' + id;
+      const r = rectOf(M, ACT.r, ACT.r), hv = hoverOf(hid, browsing && inRect(r, m), dt);
+      const pr = pressAt.get(hid) || -10, flash = smoothstep(0, 0.06, t - pr) * (1 - smoothstep(0.1, 0.45, t - pr));
+      const able = actAble(id);
+      // dimmed buttons still take a click: the app then says why they don't apply here
+      if (browsing) hits.push({ id: hid, r });
+      if (shadowK > 0) railItems.push({ k: 'shadow', M, half: [ACT.r, ACT.r], rad: ACT.r, off: [0, 4], blur: 10, a: 0.14 * railA * shadowK });
+      railItems.push({ k: 'glass', M, half: [ACT.r, ACT.r], rad: Math.min(ACT.r, SK.card.radius + 6), a: railA * (able ? 1 : 0.45), ax: aff(M, 0, 0, 1), light: Lgt, sheen: sheen0,
+        dim: 0.12 * (1 - hv), spec: 0.9 + 0.45 * hv + 0.9 * flash, band: [1e4, 1e4, 1, 0], frost: 1.6 * SK.glass.frost, panel: SK.button });
+      const b = actEls[k];
+      // the heart is filled when the song playing is liked already
+      const front = cur.byRel.get(clamp(Math.round(cur.tgt), cur.relMin, cur.relMax));
+      const icon = id === 'like' && cur.src.liked === true && front && front.rel === 0 ? 'liked' : ACT_ICON[id];
+      if (b.icon !== icon) { b.icon = icon; b.el.innerHTML = ICON[icon]; }
+      if (!b.shown) { b.s.visibility = 'visible'; b.shown = true; }
+      b.s.opacity = railA * (able ? lerp(0.82, 1, hv) : 0.32);
+      b.s.transform = 'matrix(' + aff(M, -7.5, -7.5, 1).join(',') + ')';
+    });
     if (back) {
       const M = chain(R, Tm(backAt[0], backAt[1], 0)), hw = RAIL.w / 2;
       const r = rectOf(M, hw, BACK.h), hv = hoverOf('ctl:back', browsing && inRect(r, m), dt);
@@ -1163,6 +1511,7 @@ function render(nowMs) {
   if (!railDrawn || !back) { if (backShown) { backEl.style.visibility = 'hidden'; backShown = false; } }
   chipEls.forEach((c, i) => { if (c.shown && (!railDrawn || i >= srcs.length)) { c.s.visibility = 'hidden'; c.shown = false; } });
   if (!railDrawn) btnEls.forEach(b => { if (b.shown) { b.s.visibility = 'hidden'; b.shown = false; } });
+  if (!railDrawn || !cur) actEls.forEach(b => { if (b.shown) { b.s.visibility = 'hidden'; b.shown = false; } });
   items.push(...railItems);
   draw({ items });
 
@@ -1170,9 +1519,19 @@ function render(nowMs) {
   const shownNow = new Set();
   const cardHits = [];
   let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+  // words are drawn over every card: a style may fade those a nearer card covers (eased, no blinking)
+  if (st.occlude) {
+    const tx = st.text, box = [tx.x + 118, (tx.ty + tx.ay + 18) / 2, 118, (tx.ay + 18 - tx.ty) / 2];   // title top to artist bottom
+    const rs = drawn.map(o => rectOf(o.M, card[0], card[1]));
+    drawn.forEach(dd => {
+      const r = rectOf(chain(dd.M, Tm(box[0], box[1], 0)), box[2], box[3]);
+      const hid = drawn.some((o, i) => o.z > dd.z && o.a > 0.2 && rectsMeet(r, rs[i]));
+      dd.w.cover = (dd.w.cover || 0) + ((hid ? 1 : 0) - (dd.w.cover || 0)) * (1 - Math.exp(-dt * 16));
+    });
+  }
   drawn.forEach(dd => {
     const w = dd.w;
-    if (browsing && dd.col === cols[cI] && dd.ad < 1.25 && dd.a > 0.35) {
+    if (browsing && dd.col === cols[cI] && dd.ad < (st.hitSpan || 1.25) && dd.a > 0.35) {
       const r = rectOf(dd.M, card[0], card[1]);
       cardHits.push({ id: dd.cardId, r, z: dd.z });
       bx0 = Math.min(bx0, r[0]); by0 = Math.min(by0, r[1]); bx1 = Math.max(bx1, r[0] + r[2]); by1 = Math.max(by1, r[1] + r[3]);
@@ -1188,8 +1547,12 @@ function render(nowMs) {
     if (!w.shown) { w.t.visibility = w.a.visibility = 'visible'; w.shown = true; }
     w.t.opacity = w.a.opacity = o;
     const x = lerp(st.text.x, -62, dd.hm);
-    w.t.transform = 'matrix(' + aff(dd.M, x, lerp(st.text.ty, -19, dd.hm), lerp(1, 0.86, dd.hm)).join(',') + ')';
+    const mt = aff(dd.M, x, lerp(st.text.ty, -19, dd.hm), lerp(1, 0.86, dd.hm));
+    w.t.transform = 'matrix(' + mt.join(',') + ')';
     w.a.transform = 'matrix(' + aff(dd.M, x, lerp(st.text.ay, 2, dd.hm), lerp(1, 0.87, dd.hm)).join(',') + ')';
+    // depth of field: words far back blur with their card (Settings → Depth: blur), in their own px
+    const fb = dd.dof > 0.05 && !LOOK.perf ? (dd.dof * LOOK.depth_blur * 2.5 / Math.hypot(mt[0], mt[1])).toFixed(1) : '0.0';
+    if (w.fb !== fb) { w.fb = fb; w.t.filter = w.a.filter = fb === '0.0' ? '' : 'blur(' + fb + 'px)'; }
   });
   cols.forEach(c => c.words.forEach(w => { if (w.shown && !shownNow.has(w)) hideWords(w); }));
   // long queues: text for songs far from the wheel is dropped and made again if you come back
@@ -1200,17 +1563,45 @@ function render(nowMs) {
       if (!w.shown && (r === undefined || Math.abs(r - c.p) > 12)) { w.tEl.remove(); w.aEl.remove(); c.words.delete(k); }
     }));
   }
-  // a skin's decoration sits on the card in front
+  // a skin's decorations: on the card in front, by the play/pause button, around the wheel, or
+  // the player's shell (with the vertical wheel only: it is drawn for that shape)
   let front = null;
   if (decoOn) drawn.forEach(dd => { if (dd.col === cols[cI] && (!front || dd.ad < front.ad)) front = dd; });
+  const ambA = alphaP * (1 - mp) * (1 - cc);
+  const railPt = [lerp(rx0, 0, eo), by];
   decoEls.forEach((el, i) => {
-    const dc = SK.decos[i];
-    if (!front || !dc || !el.naturalWidth) { el.style.visibility = 'hidden'; return; }
+    const dc = decoOn ? SK.decos[i] : null;
+    if (!dc || !el.naturalWidth) { el.style.visibility = 'hidden'; return; }
     const dw = dc.width * card[0] / CARD[0], k = dw / el.naturalWidth, dh = el.naturalHeight * k;
-    const cy = (dc.bottom ? card[1] : -card[1]) + dc.y;
+    let M, a;
+    if (dc.anchor === 'top' || dc.anchor === 'bottom') {
+      // Compact's cards are thin pills: a prop on their edge would sit on the song names
+      if (!front || STYLE === STYLES.compact) { el.style.visibility = 'hidden'; return; }
+      M = chain(front.M, Tm(dc.x, (dc.bottom ? card[1] : -card[1]) + dc.y, 0));
+      a = front.a * (1 - smoothstep(0.2, 0.6, front.ad)) * (1 - front.hm);
+    } else {
+      const at = dc.anchor === 'rail' ? railPt : dc.anchor === 'player' ? [rx0 / 2, 0] : [0, 0];
+      // x is measured away from the cards, so a prop beside the buttons stays outside when the rail flips left
+      const mx = dc.anchor === 'wheel' ? 1 : lerp(val(sideC), 1, eo);
+      M = chain(R, Tm(at[0] + dc.x * mx, at[1] + dc.y, 0));
+      a = ambA * (dc.anchor === 'player' ? (1 - eo) * (STYLE === STYLES.wheel ? 1 : 0) : 1) * (dc.anchor === 'rail' && !railDrawn ? 0 : 1);
+    }
+    const mo = decoMotion(dc.anim, t * dc.speed, i);
+    const ox = (dc.pivot[0] - 0.5) * dw, oy = (dc.pivot[1] - 0.5) * dh;
+    el.style.visibility = a * dc.opacity > 0.003 ? 'visible' : 'hidden';
+    el.style.opacity = a * dc.opacity * mo.a;
+    el.style.transform = 'matrix(' + aff(chain(M, Tm(mo.dx + ox, mo.dy + oy, 0), RZ(mo.rot), Sm(mo.s, mo.s, 1), Tm(-ox, -oy, 0)), -dw / 2, -dh / 2, k).join(',') + ')';
+  });
+  // particles drift around the player; their paths come from their number, so they never jump
+  const P = SK.particles;
+  partEls.forEach((el, i) => {
+    if (!P || LOOK.perf || i >= P.count || !el.naturalWidth || ambA < 0.01) { el.style.visibility = 'hidden'; return; }
+    const q = particleAt(P, i, FEEL.float ? t : 0);
+    const size = P.size * (0.6 + 0.6 * hash01(i * 3 + 3)), k = size / el.naturalWidth;
+    const M = chain(R, Tm(lerp(rx0 * 0.45, 0, eo) + q.x, q.y, 0));
     el.style.visibility = 'visible';
-    el.style.opacity = front.a * (1 - smoothstep(0.2, 0.6, front.ad)) * (1 - front.hm);
-    el.style.transform = 'matrix(' + aff(front.M, dc.x - dw / 2, cy - dh / 2, k).join(',') + ')';
+    el.style.opacity = ambA * P.opacity * q.a;
+    el.style.transform = 'matrix(' + aff(M, -size / 2, -el.naturalHeight * k / 2, k).join(',') + ')';
   });
   const hero = drawn.find(dd => dd.chosen && dd.rel === sel);
   eqEl.style.opacity = hero ? smoothstep(0.55, 0.9, mp) * hero.a : 0;
@@ -1222,6 +1613,7 @@ function render(nowMs) {
   const hovered = cardHits.find(h => inRect(h.r, m));
   cardHits.forEach(h => hoverOf(h.id, hovered === h, dt));
   hits.push(...cardHits);
+  lastHits = hits;
   hits.forEach(h => { if (h.id.startsWith('src:') || h.id.startsWith('ctl:')) { bx0 = Math.min(bx0, h.r[0]); by0 = Math.min(by0, h.r[1]); bx1 = Math.max(bx1, h.r[0] + h.r[2]); by1 = Math.max(by1, h.r[1] + h.r[3]); } });
   bounds = isFinite(bx0) ? [bx0, by0, bx1 - bx0, by1 - by0] : null;
   sendHits(browsing && presence > 0.5 ? hits : [], t);
@@ -1238,5 +1630,5 @@ if (!TAURI) {
     state: () => state,
   };
 }
-window.__skipdat = { look: () => ({ ...LOOK, U, style: Object.keys(STYLES).find(k => STYLES[k] === STYLE), glass: glassOn, base: SK.base, buffers: !!tComp, canvas: [cv.width, cv.height], arts: artCache.size }), layout: () => oriT, ori: () => val(oriC), state: () => state, dirty: () => dirty, cols: () => cols.map(c => ({ key: c.key, tgt: c.tgt, p: c.p, relMin: c.relMin, relMax: c.relMax, words: c.words.size })), ai: () => Math.round(ai), home: () => home.slice(), bounds: () => bounds };
+window.__skipdat = { look: () => ({ ...LOOK, U, style: Object.keys(STYLES).find(k => STYLES[k] === STYLE), glass: glassOn, base: SK.base, buffers: !!tComp, canvas: [cv.width, cv.height], arts: artCache.size }), layout: () => oriT, ori: () => val(oriC), state: () => state, dirty: () => dirty, cols: () => cols.map(c => ({ key: c.key, tgt: c.tgt, p: c.p, relMin: c.relMin, relMax: c.relMax, words: c.words.size })), ai: () => Math.round(ai), home: () => home.slice(), bounds: () => bounds, hits: () => lastHits.map(h => ({ id: h.id, r: h.r.slice() })), seed: n => { cloudSeedSet = n == null ? null : n >>> 0; } };
 })();

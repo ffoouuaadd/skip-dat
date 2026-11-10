@@ -1,12 +1,18 @@
 {
   "name": "LCD Night",
   "author": "Skip Dat",
-  "about": "A green-on-black LCD with scanlines and a terminal font.",
+  "about": "A green-on-black pocket LCD with scanlines and a terminal font. Its signal and battery glow up top while the battery charges, and a few pixel stars drift by.",
   "base": "panel",
   "text": { "font": "vt323.woff2", "color": "#5cff86", "soft": "#2fb558", "title": 27, "artist": 21, "weight": 400, "glow": "rgba(92, 255, 134, 0.55)" },
-  "card": { "radius": 6, "scale": 1, "top": "#0c1d10", "bottom": "#030804", "edge": "#2c5a34", "edgeWidth": 2, "bevel": 4, "gloss": 0, "scanlines": 0.45, "highlight": "#3f7a49", "dark": "#000000" },
+  "card": { "radius": 16, "scale": 1, "top": "#0c1d10", "bottom": "#030804", "edge": "#2c5a34", "edgeWidth": 2, "bevel": 4, "gloss": 0, "scanlines": 0.45, "highlight": "#3f7a49", "dark": "#000000",
+            "texture": "screen.png", "textureMode": "normal", "textureMix": 1 },
   "cover": { "radius": 2, "frame": 3, "frameColor": "#2c5a34", "frameStyle": "solid", "tint": "#5cff86", "tintAmount": 0.8 },
   "button": { "top": "#14301b", "bottom": "#061008", "edge": "#2c5a34", "icon": "#5cff86", "scanlines": 0.3 },
-  "chip": { "top": "#0c1d10", "bottom": "#030804", "text": "#2fb558", "activeTop": "#1d4a27", "activeBottom": "#0a1f0f", "activeText": "#5cff86" },
+  "chip": { "scanlines": 0.15, "top": "#0c1d10", "bottom": "#030804", "text": "#2fb558", "activeTop": "#F6A9CB", "activeBottom": "#F27DB2", "activeText": "#2A0F1E" },
+  "decoration": [
+    { "image": "signal.png", "width": 45.6, "x": -100, "y": -14.6 },
+    { "image": "battery.png", "width": 60, "x": 96, "y": -17 }
+  ],
+  "particles": { "image": "star.png", "count": 5, "size": 12, "motion": "drift", "speed": 0.35, "spread": 280, "opacity": 0.45, "pixels": true },
   "shadow": 0.7
 }

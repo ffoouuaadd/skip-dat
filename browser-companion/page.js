@@ -453,9 +453,72 @@
     }
   }
 
+  // ---------- this tab's own volume (scrolling over the wheel's play/pause button) ----------
+  // YouTube's player keeps its own volume per tab, so other tabs and the browser are untouched.
+  function volumeNow() {
+    if (SITE === 'soundcloud') return null;
+    const p = player();
+    if (p && p.getVolume) return p.isMuted && p.isMuted() ? 0 : Math.round(p.getVolume());
+    const v = mainVideo();
+    return v ? (v.muted ? 0 : Math.round(v.volume * 100)) : null;
+  }
+  function setVolume(by) {
+    if (SITE === 'soundcloud') return;
+    const p = player();
+    if (p && p.getVolume && p.setVolume) {
+      const from = p.isMuted && p.isMuted() ? 0 : p.getVolume();
+      p.setVolume(Math.max(0, Math.min(100, from + by)));
+      if (by > 0 && p.isMuted && p.isMuted() && p.unMute) p.unMute();
+      return;
+    }
+    const v = mainVideo();
+    if (v) { v.volume = Math.max(0, Math.min(1, (v.muted ? 0 : v.volume) + by / 100)); if (by > 0) v.muted = false; }
+  }
+
+  // ---------- the like button (the wheel's heart) ----------
+  // Each site's own like button for the song playing. Its pressed state says whether the song
+  // is liked; pressing it on a liked song would take the like back, so that never happens.
+  function likeButton() {
+    if (SITE === 'ytmusic') return $('ytmusic-player-bar ytmusic-like-button-renderer #button-shape-like button');
+    if (SITE === 'youtube') return $('ytd-watch-metadata like-button-view-model button');
+    return $('.playControls .playbackSoundBadge__like, .playbackSoundBadge__like');
+  }
+  function likedNow() {
+    if (SITE === 'ytmusic') {
+      const r = $('ytmusic-player-bar ytmusic-like-button-renderer');
+      if (r && r.hasAttribute('like-status')) return r.getAttribute('like-status') === 'LIKE';
+    }
+    const b = likeButton();
+    if (!b) return null;
+    if (b.hasAttribute('aria-pressed')) return b.getAttribute('aria-pressed') === 'true';
+    return b.classList.contains('sc-button-selected');
+  }
+  function like() {
+    if (likedNow() !== false) return; // liked already, or no button to read: do nothing
+    click(likeButton());
+  }
+
+  // ---------- jumping within the song (scrolling over its card) ----------
+  function seekBy(by) {
+    if (SITE === 'soundcloud') return;
+    const p = player();
+    if (p && p.getCurrentTime && p.seekTo) {
+      const len = p.getDuration ? p.getDuration() : 0;
+      let to = Math.max(0, p.getCurrentTime() + by);
+      if (len > 1) to = Math.min(to, len - 1);
+      p.seekTo(to, true);
+      return;
+    }
+    const v = mainVideo();
+    if (v) v.currentTime = Math.max(0, Math.min(isFinite(v.duration) && v.duration > 1 ? v.duration - 1 : Infinity, v.currentTime + by));
+  }
+
   function run(cmd) {
     try {
       switch (cmd && cmd.type) {
+        case 'volume': setVolume(cmd.by | 0); break;
+        case 'seek': seekBy(cmd.by | 0); break;
+        case 'like': like(); break;
         case 'play': playPause(true); break;
         case 'pause': playPause(false); break;
         case 'toggle': playPause(); break;
@@ -499,7 +562,7 @@
   function check(force) {
     timer = 0;
     let s;
-    try { s = state(); } catch (e) { return; }
+    try { s = state(); s.volume = volumeNow(); s.liked = s.hasMedia ? likedNow() : null; } catch (e) { return; }
     const json = JSON.stringify(s);
     if (json === lastSent && !force) return;
     lastSent = json;

@@ -13,7 +13,7 @@ use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::Media::Audio::{
     eRender, IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator, ISimpleAudioVolume, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
 };
-use windows::Win32::Storage::Packaging::Appx::GetApplicationUserModelId;
+use windows::Win32::Storage::Packaging::Appx::{GetApplicationUserModelId, GetPackageFamilyName};
 use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION};
 
@@ -52,11 +52,20 @@ fn process_names(pid: u32) -> (String, String) {
         };
         let mut abuf = [0u16; 260];
         let mut alen = abuf.len() as u32;
-        let aumid = if GetApplicationUserModelId(h, &mut alen, Some(PWSTR(abuf.as_mut_ptr()))).is_ok() {
+        let mut aumid = if GetApplicationUserModelId(h, &mut alen, Some(PWSTR(abuf.as_mut_ptr()))).is_ok() {
             String::from_utf16_lossy(&abuf[..(alen as usize).saturating_sub(1)])
         } else {
             String::new()
         };
+        if aumid.is_empty() {
+            // a Store app's helper process (often the one making the sound) has its package but
+            // no app id: "<family>!" still matches the app's package family in plan::same_app
+            let mut fbuf = [0u16; 260];
+            let mut flen = fbuf.len() as u32;
+            if GetPackageFamilyName(h, &mut flen, Some(PWSTR(fbuf.as_mut_ptr()))).is_ok() {
+                aumid = format!("{}!", String::from_utf16_lossy(&fbuf[..(flen as usize).saturating_sub(1)]));
+            }
+        }
         let _ = CloseHandle(h);
         (exe, aumid)
     }
@@ -85,6 +94,22 @@ fn sessions_of(app_id: &str) -> Vec<ISimpleAudioVolume> {
                         out.push(v);
                     }
                 }
+            }
+        }
+    }
+    out
+}
+
+/// Sets this app's own volume in the Volume mixer (each of its sessions) to `to(current)`.
+/// The new level, or None when the app has no audio session (it hasn't made a sound yet).
+pub fn nudge(app_id: &str, to: impl Fn(f32) -> f32) -> Option<f32> {
+    let mut out = None;
+    for v in sessions_of(app_id) {
+        unsafe {
+            let Ok(cur) = v.GetMasterVolume() else { continue };
+            let n = to(cur);
+            if v.SetMasterVolume(n, std::ptr::null()).is_ok() {
+                out.get_or_insert(n);
             }
         }
     }
@@ -125,5 +150,61 @@ impl Drop for Muted {
         if let Some(p) = MARKER.guard().as_ref() {
             let _ = std::fs::remove_file(p);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Live: every audio session on this PC with its process and app id, and whether `same_app`
+    /// matches it to SKIPDAT_LIVE_APP (not run by default).
+    #[test]
+    #[ignore]
+    fn live_list_sessions() {
+        unsafe {
+            let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED);
+            let want = std::env::var("SKIPDAT_LIVE_APP").unwrap_or_else(|_| "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify".into());
+            let en = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL).unwrap();
+            let devices = en.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE).unwrap();
+            for i in 0..devices.GetCount().unwrap() {
+                let mgr = devices.Item(i).unwrap().Activate::<IAudioSessionManager2>(CLSCTX_ALL, None).unwrap();
+                let list = mgr.GetSessionEnumerator().unwrap();
+                for j in 0..list.GetCount().unwrap() {
+                    let ctl = list.GetSession(j).unwrap();
+                    let pid = ctl.cast::<IAudioSessionControl2>().unwrap().GetProcessId().unwrap_or(0);
+                    let (exe, aumid) = process_names(pid);
+                    println!("device {i} session {j}: pid {pid} exe {exe:?} aumid {aumid:?} matches {want}: {}", crate::plan::same_app(&want, &exe, &aumid));
+                }
+            }
+        }
+    }
+
+    /// Live, against this PC's real Volume mixer (not run by default):
+    ///   cargo test --lib live_ -- --ignored --nocapture
+    /// Uses the Spotify desktop app (or SKIPDAT_LIVE_APP) and puts its volume back afterwards.
+    #[test]
+    #[ignore]
+    fn live_nudge_moves_that_app_five_percent_and_restores() {
+        unsafe {
+            let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED);
+        }
+        let id = std::env::var("SKIPDAT_LIVE_APP").unwrap_or_else(|_| "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify".into());
+        let before: Vec<f32> = sessions_of(&id).iter().map(|v| unsafe { v.GetMasterVolume().unwrap() }).collect();
+        assert!(!before.is_empty(), "{id} has no audio session: play something in it first");
+        // start from a level with room both ways
+        nudge(&id, |_| 0.5).unwrap();
+        let up = nudge(&id, |v| crate::extras::volume_after(v, 1)).unwrap();
+        let down = nudge(&id, |v| crate::extras::volume_after(v, -2)).unwrap();
+        // the mixer itself reports the new level, not just our return value
+        let seen: Vec<f32> = sessions_of(&id).iter().map(|v| unsafe { v.GetMasterVolume().unwrap() }).collect();
+        for (v, b) in sessions_of(&id).iter().zip(&before) {
+            unsafe { v.SetMasterVolume(*b, std::ptr::null()).unwrap() };
+        }
+        let restored: Vec<f32> = sessions_of(&id).iter().map(|v| unsafe { v.GetMasterVolume().unwrap() }).collect();
+        println!("{id}: before {before:?}, +1 notch {up}, -2 notches {down}, mixer saw {seen:?}, restored {restored:?}");
+        assert!((up - 0.55).abs() < 0.001 && (down - 0.45).abs() < 0.001);
+        assert!(seen.iter().all(|s| (s - 0.45).abs() < 0.001), "every session of the app moved");
+        assert!(restored.iter().zip(&before).all(|(r, b)| (r - b).abs() < 0.001), "volume put back");
     }
 }

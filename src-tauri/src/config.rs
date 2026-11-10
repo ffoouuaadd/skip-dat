@@ -26,7 +26,7 @@ pub struct Config {
     #[serde(default)]
     pub expires_at: u64,
     // ---- look (1.4) ----
-    /// carousel style: "wheel" (default), "stack", "coverflow", "orbit", "compact"
+    /// carousel style: "wheel" (default), "stack", "coverflow", "orbit", "compact", "random" (Freaky Random)
     #[serde(default = "default_style")]
     pub style: String,
     /// "small", "medium" (default), "large"
@@ -44,6 +44,9 @@ pub struct Config {
     /// skin id: a built-in one or a folder in the skins folder
     #[serde(default = "default_skin")]
     pub skin: String,
+    /// Liquid Glass in the user's own colour: a hue 0..360; None keeps the skin's own look
+    #[serde(default)]
+    pub glass_hue: Option<f64>,
     /// sites whose direct "play this queue item" was seen to reorder the queue (shuffle):
     /// they get muted skips instead
     #[serde(default)]
@@ -99,6 +102,7 @@ impl Default for Config {
             depth_fade: default_fade(),
             perf: false,
             skin: default_skin(),
+            glass_hue: None,
             jump_reorders: Vec::new(),
         }
     }

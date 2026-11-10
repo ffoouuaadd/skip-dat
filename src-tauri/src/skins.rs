@@ -17,6 +17,10 @@ const BUILTIN: &[(&str, &str)] = &[
     ("lcd-night", include_str!("../../ui/skins/lcd-night/skin.json")),
     ("brushed-chrome", include_str!("../../ui/skins/brushed-chrome/skin.json")),
     ("pixel-party", include_str!("../../ui/skins/pixel-party/skin.json")),
+    ("quicksilver", include_str!("../../ui/skins/quicksilver/skin.json")),
+    ("bare-knuckle", include_str!("../../ui/skins/bare-knuckle/skin.json")),
+    ("bubble-gum", include_str!("../../ui/skins/bubble-gum/skin.json")),
+    ("claude-ish", include_str!("../../ui/skins/claude-ish/skin.json")),
 ];
 
 #[derive(Clone, Debug, Serialize)]
@@ -131,7 +135,8 @@ pub fn file(path: &str) -> Option<(&'static str, Vec<u8>)> {
     let dir = dir()?;
     let rel = path.trim_start_matches('/');
     let rel = rel.split('?').next().unwrap_or("");
-    let decoded = rel.replace("%20", " ");
+    // the page asks through convertFileSrc, which percent-encodes the whole path ("a%2Fhat.png")
+    let decoded = percent_decode(rel)?;
     // only plain names inside the folder: no "..", no drive letters, no absolute paths
     if decoded.is_empty() || decoded.split('/').any(|p| p.is_empty() || p == "." || p == ".." || p.contains(':') || p.contains('\\')) {
         return None;
@@ -151,6 +156,23 @@ pub fn file(path: &str) -> Option<(&'static str, Vec<u8>)> {
     };
     let bytes = std::fs::read(full).ok()?;
     (bytes.len() <= 16 * 1024 * 1024).then_some((mime, bytes))
+}
+
+/// "%2F" to "/", "%20" to " " and so on; None for a broken escape or text that isn't UTF-8.
+fn percent_decode(s: &str) -> Option<String> {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' {
+            out.push(u8::from_str_radix(s.get(i + 1..i + 3)?, 16).ok()?);
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
 }
 
 /// Watch the skins folder; `changed` runs when anything in it changes.
@@ -182,8 +204,12 @@ pub fn watch(changed: impl Fn() + Send + 'static) {
 mod tests {
     use super::*;
 
+    /// Both tests point the one skins folder (DIR) somewhere else; run them one at a time.
+    static SERIAL: Mutex<()> = Mutex::new(());
+
     #[test]
     fn built_in_skins_read_and_user_skins_load_with_errors_shown() {
+        let _one_at_a_time = SERIAL.guard();
         let dir = std::env::temp_dir().join(format!("skipdat-skins-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         init(dir.clone(), "# guide", "{\"name\": \"Starter\"}");
@@ -193,7 +219,7 @@ mod tests {
         std::fs::write(dir.join("broken").join("skin.json"), "{ \"name\": ").unwrap();
         std::fs::create_dir_all(dir.join("not-a-skin")).unwrap();
         let all = list();
-        for id in ["liquid-glass", "lime-pod", "lcd-night", "brushed-chrome", "pixel-party"] {
+        for &(id, _) in BUILTIN {
             let s = all.iter().find(|s| s.id == id).expect(id);
             assert!(s.builtin && s.error.is_none() && s.data.is_object(), "{id} reads");
         }
@@ -209,6 +235,7 @@ mod tests {
 
     #[test]
     fn skin_files_stay_inside_the_skins_folder() {
+        let _one_at_a_time = SERIAL.guard();
         let dir = std::env::temp_dir().join(format!("skipdat-skinfiles-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         init(dir.clone(), "", "{}");
@@ -217,6 +244,11 @@ mod tests {
         std::fs::write(dir.join("secret.txt"), b"no").unwrap();
         assert_eq!(file("/a/hat.png").map(|f| f.0), Some("image/png"));
         assert!(file("/a/hat.png?r=12").is_some());
+        // what the page really asks for: convertFileSrc percent-encodes the slash
+        assert_eq!(file("/a%2Fhat.png?r=12").map(|f| f.0), Some("image/png"));
+        assert!(file("/..%2Fsecret.txt").is_none());
+        assert!(file("/a%2F%2E%2E%2F%2E%2E%2Fx.png").is_none(), "encoded .. is still refused");
+        assert!(file("/a%2Fhat.png%").is_none(), "a broken escape is refused");
         assert!(file("/../secret.txt").is_none());
         assert!(file("/a/../../x.png").is_none());
         assert!(file("/C:/Windows/win.ini").is_none());

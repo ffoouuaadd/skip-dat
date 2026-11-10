@@ -241,6 +241,19 @@ pub fn skip(s: &Session, n: i32) {
     }
 }
 
+/// Jump `secs` within the song (back when negative): where it landed and the song's length, or
+/// None when the player doesn't let other apps change its position.
+pub fn seek_by(s: &Session, secs: f64) -> Option<(f64, f64)> {
+    let allowed = s.GetPlaybackInfo().and_then(|i| i.Controls()).and_then(|c| c.IsPlaybackPositionEnabled()).unwrap_or(false);
+    if !allowed {
+        return None;
+    }
+    let len = duration_of(s);
+    let to = crate::extras::seek_target(position_secs(s), secs, len);
+    let done = wait(s.TryChangePlaybackPositionAsync((to * 1e7) as i64), ACT_MS)?;
+    done.then_some((to, len))
+}
+
 pub fn act(s: &Session, action: &str) {
     let op = match action {
         "play" => s.TryPlayAsync(),
@@ -551,4 +564,37 @@ fn recheck_art(id: &str, s: &Session) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+
+    /// Live, against this PC's media sessions (not run by default):
+    ///   cargo test --lib live_media -- --ignored --nocapture
+    /// Lists every session and whether it lets other apps change its position. With
+    /// SKIPDAT_LIVE_SEEK=<app id> it also jumps that session +10 s and back.
+    #[test]
+    #[ignore]
+    fn live_media_sessions_and_seeking() {
+        init_thread();
+        let m = manager().expect("media session manager");
+        let sessions = m.GetSessions().expect("sessions");
+        let want = std::env::var("SKIPDAT_LIVE_SEEK").unwrap_or_default();
+        for i in 0..sessions.Size().unwrap_or(0) {
+            let s = sessions.GetAt(i).unwrap();
+            let can = s.GetPlaybackInfo().and_then(|p| p.Controls()).and_then(|c| c.IsPlaybackPositionEnabled()).unwrap_or(false);
+            println!("{}: playing {} position {:.1}s of {:.1}s, position change allowed: {can}", app_id(&s), is_playing(&s), position_secs(&s), duration_of(&s));
+            if !want.is_empty() && app_id(&s) == want {
+                let start = position_secs(&s);
+                let fwd = seek_by(&s, 10.0);
+                std::thread::sleep(Duration::from_millis(600));
+                let after = position_secs(&s);
+                let back = seek_by(&s, -10.0);
+                std::thread::sleep(Duration::from_millis(600));
+                println!("  seek +10 from {start:.1}: {fwd:?}, now {after:.1}; seek -10: {back:?}, now {:.1}", position_secs(&s));
+                assert!(fwd.is_some() && (after - start - 10.0).abs() < 2.5, "+10 s landed");
+            }
+        }
+    }
 }

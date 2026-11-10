@@ -1,12 +1,18 @@
 {
   "name": "Lime Pod",
   "author": "Skip Dat",
-  "about": "Glossy lime-green plastic and purple bubble buttons, straight out of 2001.",
+  "about": "Glossy lime-green plastic, purple bubble buttons and a pink-tipped antenna that sways in its socket, straight out of 2001. Lime fizz rises behind.",
   "base": "panel",
-  "text": { "font": "baloo2-bold.woff2", "color": "#0e3300", "soft": "#2f6a12", "title": 22, "artist": 15, "weight": 700, "glow": "rgba(220, 255, 170, 0.6)" },
-  "card": { "radius": 38, "scale": 1, "top": "#c6ff4d", "bottom": "#46a80f", "edge": "#245d04", "edgeWidth": 2, "bevel": 6, "gloss": 0.8, "highlight": "#f6ffe0", "dark": "#1d4a02" },
+  "text": { "font": "baloo2-bold.woff2", "color": "#0e3300", "soft": "#224d08", "title": 22, "artist": 15, "weight": 700, "glow": "rgba(240, 255, 214, 0.55)" },
+  "card": { "radius": 38, "scale": 1, "top": "#c8ff52", "bottom": "#7ccf2a", "edge": "#245d04", "edgeWidth": 2, "bevel": 6, "gloss": 0.7, "highlight": "#f6ffe0", "dark": "#1d4a02",
+            "texture": "plastic.png", "textureMode": "normal", "textureMix": 1 },
   "cover": { "radius": 12, "frame": 7, "frameColor": "#d9dde3", "frameStyle": "chrome" },
-  "button": { "top": "#d2b8ff", "bottom": "#6a2fd8", "edge": "#3a1585", "icon": "#ffffff", "gloss": 0.8 },
-  "chip": { "top": "#a8e83a", "bottom": "#4c9f14", "text": "#0e3300", "activeTop": "#d2b8ff", "activeBottom": "#6a2fd8", "activeText": "#ffffff" },
+  "button": { "top": "#7c4ae6", "bottom": "#3d1290", "edge": "#2a0d6b", "icon": "#ffffff", "gloss": 0.8 },
+  "chip": { "top": "#b8f24a", "bottom": "#66c21e", "text": "#0e3300", "edge": "#2a0d6b", "activeTop": "#F6A9CB", "activeBottom": "#F27DB2", "activeText": "#2A0F1E" },
+  "decoration": [
+    { "image": "rod.png", "width": 48, "x": 77, "y": -64, "pivot": [0.313, 0.966], "animation": "sway", "speed": 0.6 },
+    { "image": "socket.png", "width": 44, "x": 72, "y": -4 }
+  ],
+  "particles": { "image": "bubble.png", "count": 6, "size": 18, "motion": "rise", "speed": 0.4, "spread": 250, "opacity": 0.55 },
   "shadow": 0.9
 }

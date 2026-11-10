@@ -227,6 +227,10 @@ mod tests {
         assert!(same_app("Spotify", "Spotify.exe", ""));
         assert!(same_app("AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", "AppleMusic.exe", "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App"));
         assert!(!same_app("AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", "AppleMusic.exe", ""));
+        // a Store app's helper process: its package family, no app id (audio.rs adds the "!")
+        assert!(same_app("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify", "Spotify.exe", "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!"));
+        assert!(!same_app("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify", "Spotify.exe", "OtherCo.Other_123!"));
+        assert!(same_app("Spotify.exe", "Spotify.exe", "OtherCo.Other_123!"), "a desktop app still matches by its exe");
         assert!(!same_app("Spotify.exe", "chrome.exe", ""));
         assert!(!same_app("", "Spotify.exe", ""));
     }

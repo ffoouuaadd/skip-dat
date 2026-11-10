@@ -1,12 +1,17 @@
 {
   "name": "Brushed Chrome",
   "author": "Skip Dat",
-  "about": "Brushed metal, chunky bevels and a pixel font, like a 2000s desktop player.",
+  "about": "Brushed aluminium, machined edges and a pixel font, like a 2000s desktop player, screwed together with a softly breathing pink power light.",
   "base": "panel",
-  "text": { "font": "silkscreen.woff2", "color": "#1b2028", "soft": "#46505e", "title": 15, "artist": 11, "weight": 400, "glow": "rgba(255, 255, 255, 0.55)", "upper": true },
-  "card": { "radius": 9, "scale": 1, "top": "#eef1f5", "bottom": "#8f98a4", "edge": "#3e444d", "edgeWidth": 1, "bevel": 6, "gloss": 0.2, "texture": "brushed.png", "textureMix": 0.55, "highlight": "#ffffff", "dark": "#2a2f36" },
-  "cover": { "radius": 3, "frame": 5, "frameColor": "#20252c", "frameStyle": "inset" },
-  "button": { "top": "#f7f9fb", "bottom": "#a3abb6", "edge": "#3e444d", "icon": "#1b2028", "bevel": 4 },
-  "chip": { "top": "#e3e7ec", "bottom": "#9aa3ae", "text": "#1b2028", "activeTop": "#7fb2ff", "activeBottom": "#2a5fb8", "activeText": "#ffffff" },
+  "text": { "font": "silkscreen.woff2", "color": "#1b2028", "soft": "#2f3640", "title": 15, "artist": 11, "weight": 400, "glow": "rgba(255, 255, 255, 0.6)", "upper": true },
+  "card": { "radius": 18, "scale": 1, "top": "#e3e7ec", "bottom": "#bcc1c8", "edge": "#424852", "edgeWidth": 1, "bevel": 4, "gloss": 0,
+            "texture": "brushed.webp", "textureMode": "normal", "textureMix": 1, "highlight": "#ffffff", "dark": "#565e69" },
+  "cover": { "radius": 6, "frame": 5, "frameColor": "#262b33", "frameStyle": "inset" },
+  "button": { "top": "#f7f9fb", "bottom": "#a9b1bb", "edge": "#424852", "icon": "#1b2028", "bevel": 4, "gloss": 0.25, "highlight": "#ffffff", "dark": "#565e69" },
+  "chip": { "top": "#e6eaee", "bottom": "#a6aeb8", "text": "#1b2028", "edge": "#424852", "activeTop": "#F6A9CB", "activeBottom": "#F27DB2", "activeText": "#2A0F1E" },
+  "decoration": [
+    { "image": "plate.png", "anchor": "top", "width": 250, "x": 0, "y": 155 },
+    { "image": "led.png", "anchor": "top", "width": 56, "x": 0, "y": 8, "animation": "pulse", "speed": 0.4 }
+  ],
   "shadow": 1
 }
